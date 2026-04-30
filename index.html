@@ -2757,15 +2757,7 @@
         const alanInput = el("f-alan");
         if (alanInput) app.form.uygulamaAlani = alanInput.value;
         app.form.asamalar[i][alan] = val;
-        if (alan === "durum" && val !== "Tamamlandı") {
-          for (let j = i + 1; j < app.form.asamalar.length; j++) {
-            app.form.asamalar[j].durum = "Beklemede";
-            app.form.asamalar[j].acik = false;
-          }
-          renderModal();
-          return;
-        }
-        if (alan === "durum" && val === "Tamamlandı") {
+        if (alan === "durum") {
           renderModal();
           return;
         }
