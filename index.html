@@ -260,7 +260,7 @@
       .intro-screen{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#ffffff;opacity:1;transition:opacity .5s ease}
       .intro-screen.intro-out{opacity:0;pointer-events:none}
       /* Arka plan: derin lacivert radyal + ince grid */
-      .intro-screen::before{content:"";position:absolute;inset:-20%;background:radial-gradient(ellipse 60% 50% at 50% 50%,#f8fafc 0%,#eef2f7 50%,#ffffff 100%);animation:iBgPulse 3.4s ease-out forwards}ds}
+      .intro-screen::before{content:"";position:absolute;inset:-20%;background:radial-gradient(ellipse 60% 50% at 50% 50%,#f8fafc 0%,#eef2f7 50%,#ffffff 100%);animation:iBgPulse 3.4s ease-out forwards}
       .intro-screen::after{content:"";position:absolute;inset:0;background:
         linear-gradient(rgba(27,44,94,.05) 1px,transparent 1px) 0 0/100% 56px,
         linear-gradient(90deg,rgba(27,44,94,.05) 1px,transparent 1px) 0 0/56px 100%;
@@ -1828,18 +1828,6 @@
           santiye: app.secilenSantiye,
           uygulama_alani: form.uygulamaAlani,
           bolge: app.bolge || "İskele",
-          asama1_malzeme: s(0).malzeme || null,
-          asama1_not: s(0).not || null,
-          asama1_metraj: parseNum(s(0).metraj),
-          asama1_durum: s(0).durum || "Beklemede",
-          asama2_malzeme: s(1).malzeme || null,
-          asama2_not: s(1).not || null,
-          asama2_metraj: parseNum(s(1).metraj),
-          asama2_durum: s(1).durum || "Beklemede",
-          asama3_malzeme: s(2).malzeme || null,
-          asama3_not: s(2).not || null,
-          asama3_metraj: parseNum(s(2).metraj),
-          asama3_durum: s(2).durum || "Beklemede",
           personeller: as
             .flatMap((a) => a.personeller || [])
             .filter((v, i, arr) => arr.indexOf(v) === i),
@@ -3789,6 +3777,8 @@
         app.logSatirlar = [];
         app.notlar = {};
         realtimeDurdur();
+        clearInterval(_havaTimer);
+        _havaTimer = null;
         el("bolge-screen").style.display = "flex";
         tabGec("projects", false);
       };
