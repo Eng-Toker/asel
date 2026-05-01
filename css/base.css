@@ -1,0 +1,71 @@
+/* base.css — CSS değişkenleri, reset, tipografi */
+
+:root {
+  --bg: #f4f6f8;
+  --card: #fff;
+  --card2: #f8fafc;
+  --border: #d0d7de;
+  --muted: #6b7280;
+  --text: #111827;
+  --accent: #84cc16;
+  --accent-d: #65a30d;
+  --warn: #d97706;
+  --err: #dc2626;
+  --ok: #16a34a;
+  --info: #0369a1;
+  --bg-warn: #fef3c7;
+  --bg-warn-2: #fde68a;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.18);
+  --radius: 14px;
+  --safe-bottom: env(safe-area-inset-bottom, 0);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+button {
+  font-family: inherit;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: var(--text);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 800;
+  margin-top: 4px;
+  line-height: 1.2;
+}

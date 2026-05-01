@@ -1,0 +1,111 @@
+/* lightbox.css — Tam ekran fotoğraf görüntüleyici */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.96);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+  touch-action: none;
+  overflow: hidden;
+}
+.lightbox.open {
+  display: flex;
+}
+.lb-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.lb-wrap.grab {
+  cursor: grabbing;
+}
+.lb-img {
+  max-width: min(90vw, 1100px);
+  max-height: 84vh;
+  object-fit: contain;
+  border-radius: 12px;
+  user-select: none;
+  pointer-events: none;
+  transform-origin: center center;
+}
+.lb-close,
+.lb-nav {
+  position: absolute;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: background 0.15s;
+}
+.lb-close:hover,
+.lb-nav:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+.lb-close {
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  font-size: 26px;
+}
+.lb-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 50px;
+  height: 50px;
+  font-size: 32px;
+}
+.lb-prev {
+  left: 16px;
+}
+.lb-next {
+  right: 16px;
+}
+.lb-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 6px 14px;
+  border-radius: 999px;
+  z-index: 2;
+}
+.lb-zoom-btns {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+.lb-zoom-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lb-zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

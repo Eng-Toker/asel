@@ -1,0 +1,151 @@
+/* layout.css — Sarmalayıcı, topbar, bottom nav, FAB, responsive */
+
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: calc(16px + env(safe-area-inset-top, 0))
+    calc(16px + env(safe-area-inset-right, 0))
+    calc(80px + var(--safe-bottom))
+    calc(16px + env(safe-area-inset-left, 0));
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+/* Mobile bottom nav */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  padding: 6px 4px calc(6px + var(--safe-bottom));
+  z-index: 50;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+.bottom-nav-inner {
+  display: flex;
+  justify-content: space-around;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.bn-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 6px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: color 0.15s;
+}
+.bn-btn.active {
+  color: var(--accent-d);
+}
+.bn-btn:hover {
+  color: var(--text);
+}
+.bn-icon {
+  font-size: 18px;
+}
+
+/* FAB */
+.fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(86px + var(--safe-bottom));
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1f2a0a;
+  border: none;
+  font-size: 28px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(132, 204, 22, 0.45);
+  cursor: pointer;
+  z-index: 40;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+.fab:hover {
+  transform: scale(1.05);
+}
+.fab:active {
+  transform: scale(0.95);
+}
+
+/* Responsive */
+@media (max-width: 780px) {
+  .records-grid,
+  .stages-grid,
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .stat {
+    padding: 10px;
+  }
+  .stat-value {
+    font-size: 20px;
+  }
+  .stat-label {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    padding: 12px;
+    padding-bottom: calc(80px + var(--safe-bottom));
+  }
+  .page-title {
+    font-size: 20px;
+  }
+  .topbar {
+    margin-bottom: 10px;
+  }
+  .bottom-nav {
+    display: block;
+  }
+  .fab {
+    display: flex;
+  }
+  .desktop-actions {
+    display: none;
+  }
+  .log-table-wrap {
+    display: none;
+  }
+  .log-cards {
+    display: flex;
+  }
+  .modal {
+    max-height: 100vh;
+  }
+}
+
+@media (min-width: 641px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
