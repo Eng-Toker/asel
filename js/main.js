@@ -19,7 +19,7 @@ import "./views/dashboard.js";
 import "./modals/record.js";
 import "./modals/note.js";
 
-import { el } from "./utils.js";
+import { el, toggleClear, clearAra } from "./utils.js";
 import { app } from "./state.js";
 import { tabGec, registerRender } from "./router.js";
 import { renderSantiyeler } from "./views/projects.js";
@@ -28,6 +28,13 @@ import { veriYukle } from "./data.js";
 import { renderLog } from "./views/log.js";
 import { havaTipKapat } from "./views/projects.js";
 import { lbKapat } from "./lightbox.js";
+
+// Inline onclick/oninput handler'larının erişmesi için window'a aç
+window.el           = el;
+window.app          = app;
+window.renderDetay  = renderDetay;
+window.toggleClear  = toggleClear;
+window.clearAra     = clearAra;
 
 // ── Render kayıtları (router'ın inline çağırması için) ────────────────────────
 registerRender("projects", renderSantiyeler);
@@ -68,10 +75,6 @@ document.addEventListener("keydown", (e) => {
     havaTipKapat();
   }
 });
-
-// Scroll / resize → hava tooltip kapat
-window.addEventListener("scroll", havaTipKapat, true);
-window.addEventListener("resize", havaTipKapat);
 
 // ── Intro animasyonu ──────────────────────────────────────────────────────────
 
