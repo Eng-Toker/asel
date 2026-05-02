@@ -104,6 +104,7 @@ export function renderDetay() {
                 <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
                   <div class="stage-card-title">Aşama ${a.sira}</div>
                   ${!misafir ? `<button class="btn btn-sm" style="background:#fee2e2;color:#dc2626;border-color:#fca5a5;font-size:10px;padding:1px 6px;height:22px" onclick="hasarFotoYukle('${rec.id}',${a.sira})" title="Hasar fotoğrafı ekle">⚠</button>` : ""}
+                  ${!misafir && hasarFoto.length ? `<button class="btn btn-sm rapor-btn" onclick="raporModalAc('${rec.id}',${a.sira})" title="AI ile teknik rapor üret">📄 Rapor</button>` : ""}
                 </div>
                 ${rozetHtml}
               </div>

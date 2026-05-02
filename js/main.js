@@ -18,6 +18,7 @@ import "./views/ayarlar.js";
 import "./views/dashboard.js";
 import "./modals/record.js";
 import "./modals/note.js";
+import "./modals/rapor.js";
 
 import { el, toggleClear, clearAra } from "./utils.js";
 import { app } from "./state.js";
@@ -72,6 +73,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (el("modal-overlay").classList.contains("open"))     window.modalKapat();
     if (el("not-modal-overlay").classList.contains("open")) window.notModalKapat();
+    if (el("rapor-modal")?.classList.contains("open"))      window.raporModalKapat();
     lbKapat();
     havaTipKapat();
   }

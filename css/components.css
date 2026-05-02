@@ -426,3 +426,17 @@
   border-radius: 999px;
   transition: width 0.3s;
 }
+
+/* Rapor butonu — aşama kartı head'inde, hasar foto varsa görünür */
+.rapor-btn {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  font-size: 10px;
+  padding: 1px 6px;
+  height: 22px;
+  font-weight: 700;
+}
+.rapor-btn:hover {
+  background: #bfdbfe;
+}

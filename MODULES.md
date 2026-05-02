@@ -49,7 +49,18 @@ asel/
         │                        asamaToggle, asamaGuncelle, asamaSayisiDegisti,
         │                        malzSec, malzDigerAc, malzAra, perToggle, perKaldir,
         │                        perAra, perDigerEkle, perHepsiniSil, dzDrag, dzDrop
-        └── note.js              window: notModalAc, notModalKapat, notKaydet
+        ├── note.js              window: notModalAc, notModalKapat, notKaydet
+        ├── rapor.js             Aşama bazlı AI teknik rapor (Gemini 2.5 Flash → html2canvas + jsPDF
+        │                        → Drive → santiye_raporlar INSERT). PDF şablonu inline; layout ve
+        │                        CSS asel_teknik_rapor_editoru_v1_16.html'den birebir taşınmıştır.
+        │                        Sayfa sayfa render: her .page elementi window.html2canvas ile
+        │                        canvas'a çekilip jsPDF.addPage ile birleştirilir (scale=3, PNG).
+        │                        Hizalama: text-align:justify + hyphens:auto. Container
+        │                        position:fixed + visibility toggle ile gizlenir.
+        │                        window: raporModalAc, raporModalKapat, raporUret,
+        │                        raporYorumKontrol, raporModalAcTekrar
+        └── rapor-assets.js      ASEL + KÖSTER logo base64'leri (rapor.js okunabilirliği için ayrı
+                                 dosya). export: ASEL_LOGO, KOSTER_LOGO.
 
 ```
 

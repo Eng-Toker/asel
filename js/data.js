@@ -58,12 +58,16 @@ export async function veriYukle({ sessiz = false } = {}) {
 
 export function satirToKayit(row, aRows, fRows) {
   let asamalar = aRows.length
-    ? aRows.map((r) => mkAsama({
-        malzeme: r.malzeme || "", not: r.uygulama_notu || "",
-        metraj: r.metraj != null ? String(r.metraj) : "",
-        durum: r.durum || "Beklemede",
-        personeller: Array.isArray(r.personeller) ? r.personeller : [],
-      }, r.sira_no))
+    ? aRows.map((r) => {
+        const a = mkAsama({
+          malzeme: r.malzeme || "", not: r.uygulama_notu || "",
+          metraj: r.metraj != null ? String(r.metraj) : "",
+          durum: r.durum || "Beklemede",
+          personeller: Array.isArray(r.personeller) ? r.personeller : [],
+        }, r.sira_no);
+        a.createdAt = r.created_at || null;
+        return a;
+      })
     : [1, 2, 3].map((n) => mkAsama({
         malzeme: row[`asama${n}_malzeme`] || "", not: row[`asama${n}_not`] || "",
         metraj: row[`asama${n}_metraj`] != null ? String(row[`asama${n}_metraj`]) : "",
@@ -75,13 +79,16 @@ export function satirToKayit(row, aRows, fRows) {
   for (const f of fRows) {
     const no = Number(f.asama_no || 1);
     while (asamalar.length < no) asamalar.push(mkAsama({}, asamalar.length + 1));
-    asamalar[no - 1].fotograflar.push({ id: f.id, url: f.file_url, file_path: f.file_path, file_id: f.file_id, hasar: !!f.hasar });
+    asamalar[no - 1].fotograflar.push({
+      id: f.id, url: f.file_url, file_path: f.file_path, file_id: f.file_id,
+      hasar: !!f.hasar, createdAt: f.created_at || null,
+    });
   }
 
   return {
     id: row.id, santiye: row.santiye, uygulamaAlani: row.uygulama_alani,
     bolge: row.bolge, personeller: row.personeller || [],
-    asamalar, updatedAt: row.updated_at,
+    asamalar, updatedAt: row.updated_at, createdAt: row.created_at || null,
   };
 }
 
@@ -97,5 +104,6 @@ export function mkAsama(src, sira) {
     yeniFotolar: [],
     silinecek: [],
     acik: sira <= 3,
+    createdAt: null,
   };
 }
