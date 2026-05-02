@@ -24,6 +24,9 @@
     <link rel="stylesheet" href="css/lightbox.css" />
     <link rel="stylesheet" href="css/views.css" />
     <link rel="stylesheet" href="css/layout.css" />
+
+    <!-- AI Rapor için PDF üretimi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   </head>
   <body>
     <!-- Yükleniyor overlay -->
@@ -816,6 +819,243 @@
         </div>
       </div>
     </div>
+
+    <!-- AI Rapor Modalı -->
+    <div
+      id="rapor-modal"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 9100;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        overflow-y: auto;
+      "
+    >
+      <div
+        class="card"
+        style="
+          max-width: 560px;
+          width: 100%;
+          padding: 0;
+          position: relative;
+          margin: auto;
+        "
+      >
+        <div
+          class="modal-head"
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 18px 20px 12px;
+            border-bottom: 1px solid var(--border);
+          "
+        >
+          <div>
+            <div
+              style="
+                font-size: 11px;
+                color: var(--muted);
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+              "
+            >
+              AI Teknik Rapor
+            </div>
+            <div
+              id="rapor-modal-title"
+              style="font-size: 16px; font-weight: 700; margin-top: 2px"
+            >
+              Aşama için rapor
+            </div>
+          </div>
+          <button
+            class="btn btn-sm"
+            onclick="raporModalKapat()"
+            style="font-size: 16px"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style="padding: 16px 20px 20px">
+          <div id="rapor-step-yorum">
+            <div
+              style="margin-bottom: 12px; font-size: 13px; color: var(--muted)"
+            >
+              Bu aşama için <b>olay/şikayet beyanın</b>. AI bu beyanı + malzeme
+              föyünü + fotoğrafları (normal + hasar) inceleyerek 7 bölümlü
+              teknik rapor üretir.
+            </div>
+            <textarea
+              id="rapor-yorum"
+              rows="6"
+              class="form-input"
+              placeholder="Örn: Uygulama tamamlandıktan sonra başka ekip tarafından detay hattı kırıldı, çiçeklik kenarında izolasyon zedelendi..."
+              oninput="raporYorumKontrol()"
+              style="
+                width: 100%;
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 12px;
+                font-size: 14px;
+                font-family: inherit;
+                resize: vertical;
+                background: #fff;
+                color: var(--text);
+              "
+            ></textarea>
+            <div
+              id="rapor-yorum-karakter"
+              style="
+                font-size: 11px;
+                color: var(--muted);
+                margin-top: 4px;
+                text-align: right;
+              "
+            >
+              0 / 20
+            </div>
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end;
+                margin-top: 14px;
+              "
+            >
+              <button class="btn" onclick="raporModalKapat()">İptal</button>
+              <button
+                id="rapor-uret-btn"
+                class="btn btn-primary"
+                onclick="raporUret()"
+                disabled
+              >
+                📄 Rapor Üret
+              </button>
+            </div>
+          </div>
+
+          <div
+            id="rapor-step-yukleniyor"
+            style="display: none; text-align: center; padding: 32px 0"
+          >
+            <div style="font-size: 48px; margin-bottom: 12px">⏳</div>
+            <div
+              id="rapor-yukleniyor-metin"
+              style="font-size: 14px; font-weight: 600"
+            >
+              Rapor üretiliyor...
+            </div>
+            <div
+              style="font-size: 12px; color: var(--muted); margin-top: 6px"
+            >
+              Föy okunuyor, fotoğraflar analiz ediliyor — bu 20-40 saniye
+              sürebilir.
+            </div>
+          </div>
+
+          <div id="rapor-step-sonuc" style="display: none">
+            <div
+              style="
+                background: #dcfce7;
+                border: 1px solid #86efac;
+                border-radius: 8px;
+                padding: 12px;
+                margin-bottom: 12px;
+              "
+            >
+              <div
+                style="font-size: 13px; font-weight: 600; color: #166534"
+              >
+                ✓ Rapor başarıyla oluşturuldu
+              </div>
+              <div
+                id="rapor-foy-durum"
+                style="font-size: 11px; color: #166534; margin-top: 4px"
+              ></div>
+            </div>
+            <div style="font-size: 13px; margin-bottom: 8px">
+              PDF Drive'a kaydedildi:
+            </div>
+            <a
+              id="rapor-drive-link"
+              href="#"
+              target="_blank"
+              style="
+                display: block;
+                padding: 10px;
+                background: #f1f5f9;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                text-decoration: none;
+                color: #1e40af;
+                font-size: 13px;
+                word-break: break-all;
+              "
+              >📎 Drive'da aç</a
+            >
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end;
+                margin-top: 14px;
+              "
+            >
+              <button class="btn btn-primary" onclick="raporModalKapat()">
+                Tamam
+              </button>
+            </div>
+          </div>
+
+          <div id="rapor-step-hata" style="display: none">
+            <div
+              style="
+                background: #fee2e2;
+                border: 1px solid #fca5a5;
+                border-radius: 8px;
+                padding: 12px;
+              "
+            >
+              <div
+                style="font-size: 13px; font-weight: 600; color: #991b1b"
+              >
+                ⚠ Rapor üretilemedi
+              </div>
+              <div
+                id="rapor-hata-metni"
+                style="font-size: 12px; color: #991b1b; margin-top: 6px"
+              ></div>
+            </div>
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end;
+                margin-top: 14px;
+              "
+            >
+              <button class="btn" onclick="raporModalKapat()">Kapat</button>
+              <button class="btn btn-primary" onclick="raporModalAcTekrar()">
+                Tekrar Dene
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gizli rapor şablonu (PDF üretiminde html2pdf hedefi) -->
+    <div
+      id="rapor-template-container"
+      style="position: absolute; left: -99999px; top: 0; width: 794px"
+    ></div>
 
     <!-- Lightbox -->
     <div class="lightbox" id="lightbox">

@@ -99,11 +99,13 @@ export function renderDetay() {
             const rozetHtml = `<span class="badge ${badgeCls(a.durum)}">${esc(a.durum)}</span>`;
             const hasarFoto  = (a.fotograflar || []).filter((f) =>  f.hasar);
             const normalFoto = (a.fotograflar || []).filter((f) => !f.hasar);
+            const hasarFotoVar = hasarFoto.length > 0;
             return `<div class="stage-card">
               <div class="stage-card-head">
-                <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;flex-wrap:wrap">
                   <div class="stage-card-title">Aşama ${a.sira}</div>
                   ${!misafir ? `<button class="btn btn-sm" style="background:#fee2e2;color:#dc2626;border-color:#fca5a5;font-size:10px;padding:1px 6px;height:22px" onclick="hasarFotoYukle('${rec.id}',${a.sira})" title="Hasar fotoğrafı ekle">⚠</button>` : ""}
+                  ${(hasarFotoVar && !misafir) ? `<button class="btn btn-sm" style="background:#dbeafe;color:#1e40af;border-color:#93c5fd;font-size:10px;padding:1px 8px;height:22px" onclick="event.stopPropagation();raporModalAc('${rec.id}',${a.sira})" title="Bu aşama için AI teknik rapor üret">📄 Rapor</button>` : ""}
                 </div>
                 ${rozetHtml}
               </div>

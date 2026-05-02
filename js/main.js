@@ -18,6 +18,7 @@ import "./views/ayarlar.js";
 import "./views/dashboard.js";
 import "./modals/record.js";
 import "./modals/note.js";
+import "./rapor.js";
 
 import { el, toggleClear, clearAra } from "./utils.js";
 import { app } from "./state.js";
