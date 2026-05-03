@@ -214,14 +214,30 @@ function fotoGridHtml(fotolar) {
   </div>`;
 }
 
-function pdfHtml({ kayit, asama, yorum, ai, foyDosyaAdi, foyBulundu, fotolar, hazirlayan, raporTarihi, raporNo }) {
+function pdfHtml({ kayit, asama, yorum, ai, foyDosyaAdi, foyBulundu, foyKaynak, foyWebUrl, foyWebBaslik, fotolar, hazirlayan, raporTarihi, raporNo }) {
   const malzeme = asama.malzeme || "—";
   const konum = app.bolge ? `${app.bolge} / KKTC` : "KKTC";
   const yorumHtml = esc(yorum).replace(/\n/g, "<br>");
 
-  const foyDurumu = foyBulundu
-    ? `<span style="color:#0d6e3f">✓ Bulundu (${esc(foyDosyaAdi || "")})</span>`
-    : `<span style="color:#9a1616">Bulunamadı</span>`;
+  // foyWebBaslik parametre olarak alınıyor ama gösterimde kullanılmıyor (rezerv).
+  const foyDurumu = (() => {
+    switch (foyKaynak) {
+      case 'drive-tf':
+        return `<span style="color:#0d6e3f">✓ Bulundu (Drive: ${esc(foyDosyaAdi || "")})</span>`;
+      case 'koster-web':
+        return `<span style="color:#0d6e3f">✓ Bulundu (KÖSTER web sitesi)</span>`
+             + (foyWebUrl ? `<br><span style="font-size:0.85em">${esc(foyWebUrl)}</span>` : '');
+      case 'tf-yok':
+        return `<span style="color:#9a1616">Drive klasörü mevcut, TF dosyası eksik</span>`;
+      case 'web-yok':
+        return `<span style="color:#9a1616">Bulunamadı (Drive ve web aramada yok)</span>`;
+      case 'ai-general':
+        return `<span style="color:#9a1616">Föy yok (KÖSTER dışı ürün)</span>`;
+      case 'none':
+      default:
+        return `<span style="color:#9a1616">Bulunamadı</span>`;
+    }
+  })();
 
   const teknikRefMetin = ai.technicalReferences?.trim()
     || (foyBulundu ? "—" : "İlgili ürünün teknik föyü değerlendirmeye dahil edilememiştir.");
@@ -576,8 +592,11 @@ window.raporUret = async () => {
     const html = pdfHtml({
       kayit, asama, yorum,
       ai: aiCevabi.rapor,
-      foyBulundu: !!aiCevabi.foyBulundu,
-      foyDosyaAdi: aiCevabi.foyDosyaAdi,
+      foyBulundu:   !!aiCevabi.foyBulundu,
+      foyDosyaAdi:  aiCevabi.foyDosyaAdi,
+      foyKaynak:    aiCevabi.foyKaynak    || 'none',
+      foyWebUrl:    aiCevabi.foyWebUrl    || null,
+      foyWebBaslik: aiCevabi.foyWebBaslik || null,
       fotolar: hazirlananlar,
       hazirlayan, raporTarihi, raporNo,
     });
