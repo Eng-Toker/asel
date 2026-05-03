@@ -216,7 +216,6 @@ function fotoGridHtml(fotolar) {
 
 function pdfHtml({ kayit, asama, yorum, ai, foyDosyaAdi, foyBulundu, fotolar, hazirlayan, raporTarihi, raporNo }) {
   const malzeme = asama.malzeme || "—";
-  const asamaTarihi = asama.createdAt || kayit.createdAt || kayit.updatedAt;
   const konum = app.bolge ? `${app.bolge} / KKTC` : "KKTC";
   const yorumHtml = esc(yorum).replace(/\n/g, "<br>");
 
@@ -432,7 +431,7 @@ function pdfHtml({ kayit, asama, yorum, ai, foyDosyaAdi, foyBulundu, fotolar, ha
             <div class="kv"><b>Konum:</b><span>${esc(konum)}</span></div>
             <div class="kv"><b>Alan:</b><span>${esc(kayit.uygulamaAlani)}</span></div>
             <div class="kv"><b>Aşama:</b><span>${esc(asama.sira)} / ${esc((kayit.asamalar || []).length)}</span></div>
-            <div class="kv"><b>Aşama Tarihi:</b><span>${esc(tarihTr(asamaTarihi))}</span></div>
+            <div class="kv"><b>Rapor Tarihi:</b><span>${esc(tarihTr(raporTarihi))}</span></div>
           </div>
         </div>
 

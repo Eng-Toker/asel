@@ -7,6 +7,9 @@
 const DRIVE_FOY_KLASOR_ID = '1-xqiQMId4Xs6KrP6pqB6aZhmbBJXlve0';
 const RAPOR_KOK_KLASOR_ADI = 'Şantiye Raporları';
 
+// Föy index cache key — Worker'ın kendi hostname'i (caches.default şartı).
+const FOY_INDEX_CACHE_URL = 'https://drive-upload.eng-adtoker.workers.dev/__cache/koster-foy-index-v3';
+
 const SISTEM_PROMPT = `Sen ASEL Group bünyesinde çalışan kıdemli bir su yalıtım ve izolasyon
 teknik uzmanısın. Görevin; saha mühendisinin yorumu, ekteki ürün teknik
 föyü (varsa) ve hasar fotoğraflarını birlikte değerlendirerek teknik
@@ -54,12 +57,109 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // ── /foyTest ─ Geçici test endpoint (GET veya POST). Onay sonrası silinecek. ──
+    if (path === '/foyTest') {
+      try {
+        const tA = Date.now();
+        const token = await getAccessToken(env);
+        const tB = Date.now();
+        const { index, cached, buildMs } = await kosterFoyIndexYukle(token);
+        const tC = Date.now();
+
+        const testCases = [
+          { input: 'KÖSTER KBE Flüssigfolie',     expect: 'drive-tf' },
+          { input: 'KÖSTER NB 2000',              expect: 'drive-tf' },
+          { input: 'KÖSTER BDM / BDM Powder',     expect: 'drive-tf' },
+          { input: 'KÖSTER KB-Pur IN',            expect: 'drive-tf' },
+          { input: 'KÖSTER Polysil TG 500',       expect: 'drive-tf' },
+          { input: 'KÖSTER TPO Aqua U15',         expect: 'tf-yok'   },
+          { input: 'Fondolin',                    expect: 'none'     },
+          { input: 'KÖSTER Asla Var Olmayan X',   expect: 'none'     },
+        ];
+        const tests = testCases.map(tc => {
+          const actual = foyEslestir(tc.input, index);
+          return {
+            input:        tc.input,
+            normalized:   normalizeKlasorAdi(tc.input),
+            expected:     tc.expect,
+            actual:       actual.kaynak,
+            klasorAdi:    actual.klasorAdi || null,
+            tfDosyasi:    actual.file?.fileName || null,
+            sebep:        actual.sebep || null,
+            pass:         actual.kaynak === tc.expect,
+          };
+        });
+
+        const kategoriDagilimi = {};
+        const tfYokListesi = [];
+        for (const [key, val] of Object.entries(index)) {
+          const kat = val.kategori || '(yok)';
+          kategoriDagilimi[kat] = (kategoriDagilimi[kat] || 0) + 1;
+          if (val.tfYok) tfYokListesi.push({ key, klasorAdi: val.klasorAdi, kategori: val.kategori });
+        }
+
+        // KÖSTER web fallback testleri (paralel)
+        const webGirdileri = [
+          'KÖSTER TPO Aqua U15',          // Drive'da TF yok, web'de bulunmalı
+          'KÖSTER KBE Flüssigfolie',      // web kontrol
+          'KÖSTER NB 2000',               // web kontrol
+          'KÖSTER Asla Var Olmayan X',    // web-yok bekleniyor
+        ];
+        const tD = Date.now();
+        const kosterWebTest = await Promise.all(webGirdileri.map(async input => {
+          const ti = Date.now();
+          const r = await kosterWebAra(input);
+          const tj = Date.now();
+          return {
+            input,
+            query:            r.query || null,
+            kaynak:           r.kaynak,
+            url:              r.url || null,
+            baslik:           r.baslik || null,
+            icerik_uzunluk:   r.icerik?.length || 0,
+            icerik_baslangic: r.icerik ? r.icerik.slice(0, 200) : null,
+            sebep:            r.sebep || null,
+            adim:             r.adim || null,
+            error:            r.error || null,
+            ms:               tj - ti,
+          };
+        }));
+        const tE = Date.now();
+
+        return new Response(JSON.stringify({
+          timings: {
+            token_ms:        tB - tA,
+            index_lookup_ms: tC - tB,
+            build_ms:        cached ? null : buildMs,
+            cached,
+            web_test_ms:     tE - tD,
+          },
+          ozet: {
+            toplam_urun:        Object.keys(index).length,
+            kategori_dagilimi:  kategoriDagilimi,
+            tf_yok_sayisi:      tfYokListesi.length,
+            tf_yok_listesi:     tfYokListesi,
+          },
+          tests,
+          kosterWebTest,
+          tum_anahtarlar: Object.keys(index).sort(),
+        }, null, 2), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message, stack: err.stack }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
     }
-
-    const url = new URL(request.url);
-    const path = url.pathname;
 
     // ── /rapor ─ AI ile teknik rapor 6 alanı üret (Gemini 2.5 Flash) ──────────
     if (path === '/rapor') {
@@ -333,107 +433,235 @@ function suffixEkle(fileName, denemeNo) {
   return fileName.replace(/\.pdf$/i, `${suffix}.pdf`);
 }
 
-// ─── Föy fuzzy match ─────────────────────────────────────────────────────────
+// ─── Föy klasör-eşleme (v3) ──────────────────────────────────────────────────
+// Drive yapısı: root → 9 kategori → 35 ürün (leaf) klasörü → PDF'ler.
+// Her leaf klasör adı app'teki malzeme adıyla 1:1 eşleşir (TR karakter +
+// boşluk + slash normalizasyonu sonrası). TF dosyası leaf içinde aranır.
 
-function normalizeMalzeme(s) {
+function normalizeKlasorAdi(s) {
   return String(s || '')
-    .trim()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFKC')
+    .replace(/\//g, '')             // "BDM / BDM Powder" → "BDM  BDM Powder"
+    .replace(/\s+/g, ' ')           // çift boşluk tek boşluğa
+    .normalize('NFD')               // diakritik ayrıştırması
+    .replace(/[̀-ͯ]/g, '') // combining mark'leri at
     .replace(/Ö/g, 'O').replace(/ö/g, 'o')
     .replace(/Ü/g, 'U').replace(/ü/g, 'u')
-    .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
-    .replace(/Ş/g, 'S').replace(/ş/g, 's')
-    .replace(/İ/g, 'I').replace(/ı/g, 'i')
     .replace(/Ç/g, 'C').replace(/ç/g, 'c')
+    .replace(/Ş/g, 'S').replace(/ş/g, 's')
+    .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
+    .replace(/İ/g, 'I').replace(/ı/g, 'i')
     .toLowerCase()
-    .replace(/\s+/g, ' ');
+    .trim();
 }
 
-function foyEslestir(malzeme, pdfListesi) {
-  const norm = normalizeMalzeme(malzeme);
-  if (!norm) return { eslesme: 'none' };
-
-  // ─── ÖN KONTROL: KÖSTER ürünü mü? ───
-  // Tüm KÖSTER olmayan malzemeler için Drive'da föy zaten yok.
-  // Sonradan internet fallback'i eklenecek.
-  if (!norm.startsWith('koster')) {
-    console.log("KÖSTER ürünü değil, Drive araması atlandı:", malzeme);
-    return { eslesme: 'none', sebep: 'koster-degil' };
-  }
-
-  // ─── Tokenize: ≥3 karakter ───
-  const tokenize = (s) => normalizeMalzeme(s)
-    .replace(/[-_.,()\/]+/g, ' ')
-    .split(/\s+/)
-    .filter(t => t.length >= 3);
-
-  const malzemeTokens = tokenize(malzeme);
-  if (malzemeTokens.length === 0) return { eslesme: 'none' };
-
-  // ─── Stop-words: anlam taşımayan token'lar ───
-  // Skoru dolduran ama belirleyici olmayan kelimeler.
-  // Genel ürün adı, ölçü birimleri, belge tipi kodları, standart kodları.
-  const stopWords = new Set([
-    'koster', 'köster',
-    'kg', 'lt', 'ml', 'gr',
-    'gbf', 'tds', 'msds', 'pdf', 'rapor', 'test',
-    'sivi', 'siv', 'toz', 'bilesen', 'bilese', 'set',
-    'din', 'astm', 'iso', 'tse', 'cen',
-    'pox', 'sps', 'sup', 'imo'
-  ]);
-
-  const malzemeKeyTokens = malzemeTokens.filter(t => !stopWords.has(t));
-
-  console.log("Malzeme tokens:", malzemeTokens);
-  console.log("Key tokens (stop word'süz):", malzemeKeyTokens);
-
-  // Hiç anahtar token yoksa eşleştirme yapma
-  if (malzemeKeyTokens.length === 0) {
-    console.log("Anahtar token yok, eşleşme yapılmıyor");
-    return { eslesme: 'none', sebep: 'anahtar-token-yok' };
-  }
-
-  // ─── 1. Exact match (uzantısız tam eşitlik) ───
-  let m = pdfListesi.find(p => {
-    const pdfNorm = normalizeMalzeme(p.name.replace(/\.pdf$/i, ''));
-    return pdfNorm === norm;
-  });
-  if (m) return { eslesme: 'exact', id: m.id, name: m.name };
-
-  // ─── 2. Token skorlama: SADECE tam eşitlik (===) ───
-  let enIyi = null;
-  let enIyiSkor = 0;
-
-  for (const p of pdfListesi) {
-    const pdfTokens = tokenize(p.name.replace(/\.pdf$/i, ''));
-    let skor = 0;
-
-    for (const kt of malzemeKeyTokens) {
-      // SADECE tam eşitlik — includes kaldırıldı
-      if (pdfTokens.some(pt => pt === kt)) {
-        skor++;
-      }
-    }
-
-    if (skor > enIyiSkor) {
-      enIyiSkor = skor;
-      enIyi = p;
-    }
-  }
-
-  console.log("En iyi eşleşme:", enIyi?.name, "Skor:", enIyiSkor);
-
-  // En az 1 ANAHTAR token tam eşleşmesi
-  if (enIyi && enIyiSkor >= 1) {
+function foyEslestir(malzeme, index) {
+  const key = normalizeKlasorAdi(malzeme);
+  if (!key) return { kaynak: 'none', sebep: 'malzeme-bos' };
+  const hit = index[key];
+  if (!hit) return { kaynak: 'none', sebep: 'malzeme-listede-yok' };
+  if (hit.tfYok) {
     return {
-      eslesme: enIyiSkor >= 2 ? 'token-strong' : 'token-weak',
-      id: enIyi.id,
-      name: enIyi.name,
-      skor: enIyiSkor
+      kaynak:    'tf-yok',
+      sebep:     'klasor-var-tf-eksik',
+      klasorAdi: hit.klasorAdi,
+      kategori:  hit.kategori,
     };
   }
+  return {
+    kaynak:    'drive-tf',
+    file:      { fileId: hit.fileId, fileName: hit.fileName },
+    klasorAdi: hit.klasorAdi,
+    kategori:  hit.kategori,
+  };
+}
 
-  return { eslesme: 'none', sebep: 'eslesme-yok' };
+// Recursive: leaf klasörlere kadar in, leaf'leri index'e koy.
+// Root'tan ilk seviye = kategori adı (kategori parametresine yazılır).
+async function foyIndexBuildRecursive(token, folderId, folderName, kategori) {
+  const items = await driveListele(token, folderId);
+  const subFolders = items.filter(o => o.mimeType === 'application/vnd.google-apps.folder');
+  const pdfs       = items.filter(o => o.mimeType === 'application/pdf');
+
+  // Alt klasör varsa: bu seviye leaf değil, paralel olarak in.
+  if (subFolders.length > 0) {
+    const subResults = await Promise.all(
+      subFolders.map(f => foyIndexBuildRecursive(
+        token,
+        f.id,
+        f.name,
+        // Root → 1. seviye: kategori = f.name. Daha derin: kategori değişmez.
+        kategori === null ? f.name : kategori
+      ))
+    );
+    return Object.assign({}, ...subResults);
+  }
+
+  // Leaf klasör. folderName boşsa (root düz PDF içeriyorsa) atla.
+  if (!folderName) return {};
+
+  const tf = pdfs.find(p => /-TF(-\d+)?\.pdf$/i.test(p.name));
+  const key = normalizeKlasorAdi(folderName);
+  if (tf) {
+    return { [key]: { fileId: tf.id, fileName: tf.name, klasorAdi: folderName, kategori } };
+  }
+  return { [key]: { tfYok: true, klasorAdi: folderName, kategori } };
+}
+
+async function kosterFoyIndexYukle(token) {
+  const cacheKey = new Request(FOY_INDEX_CACHE_URL);
+  const cached = await caches.default.match(cacheKey);
+  if (cached) {
+    const index = await cached.json();
+    return { index, cached: true, buildMs: 0 };
+  }
+
+  const t0 = Date.now();
+  const index = await foyIndexBuildRecursive(token, DRIVE_FOY_KLASOR_ID, null, null);
+  const buildMs = Date.now() - t0;
+
+  await caches.default.put(cacheKey, new Response(JSON.stringify(index), {
+    headers: {
+      'Content-Type':  'application/json',
+      'Cache-Control': 's-maxage=3600',
+    },
+  }));
+
+  return { index, cached: false, buildMs };
+}
+
+// ─── KÖSTER web fallback (koster.com.tr/ara → /<slug>/) ──────────────────────
+// SADECE KÖSTER ürünleri için çağrılır. Çağıran taraf bu kuralı uygular;
+// fonksiyon kendi içinde de defensive double-check yapar.
+
+async function kosterWebAra(malzeme) {
+  // Defensive: KÖSTER değilse hiç deneme
+  const norm = normalizeKlasorAdi(malzeme);
+  if (!norm.startsWith('koster')) {
+    return { kaynak: 'web-yok', sebep: 'koster-degil' };
+  }
+
+  const query = kosterQueryHazirla(malzeme);
+  if (!query) {
+    return { kaynak: 'web-yok', sebep: 'sorgu-bos' };
+  }
+
+  // 1) Site arama
+  const aramaUrl = `https://koster.com.tr/ara/?q=${encodeURIComponent(query)}`;
+  let aramaHtml;
+  try {
+    aramaHtml = await kosterFetch(aramaUrl);
+  } catch (e) {
+    return { kaynak: 'web-yok', sebep: 'fetch-hatasi', adim: 'arama', query, error: e.message };
+  }
+
+  // 2) İlk ürün anchor'ını bul (attribute sırasına tolerant)
+  const anchorIciYakala = (re) => aramaHtml.match(re);
+  let anchorMatch =
+    anchorIciYakala(/<a\s[^>]*\bhref="([^"]+)"[^>]*\bclass="[^"]*\blist-group-item-action\b[^"]*"[^>]*>([\s\S]*?)<\/a>/) ||
+    anchorIciYakala(/<a\s[^>]*\bclass="[^"]*\blist-group-item-action\b[^"]*"[^>]*\bhref="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+  if (!anchorMatch) {
+    return { kaynak: 'web-yok', sebep: 'arama-sonucsuz', query };
+  }
+  const detayUrl = anchorMatch[1];
+  const anchorIci = anchorMatch[2];
+
+  const strongMatch = anchorIci.match(/<strong>([\s\S]*?)<\/strong>/);
+  const baslikRaw = strongMatch ? stripHtmlTags(strongMatch[1]) : '';
+
+  // 3) Detay sayfayı çek
+  let detayHtml;
+  try {
+    detayHtml = await kosterFetch(detayUrl);
+  } catch (e) {
+    return { kaynak: 'web-yok', sebep: 'fetch-hatasi', adim: 'detay', query, url: detayUrl, error: e.message };
+  }
+
+  // 4) Ana içerik bloğu: col-md-7 başlangıcından ilk "addtional" div'ine kadar
+  const blokStart = detayHtml.indexOf('<div class="col-12 col-md-7">');
+  if (blokStart === -1) {
+    return { kaynak: 'web-yok', sebep: 'parse-hatasi', adim: 'col-md-7-yok', query, url: detayUrl };
+  }
+  const additionalIdx = detayHtml.indexOf('<div class="addtional', blokStart);
+  const blokEnd = additionalIdx === -1 ? detayHtml.length : additionalIdx;
+  const blok = detayHtml.slice(blokStart, blokEnd);
+
+  // 5) h1, h2, p text'lerini sırayla çek
+  const parcalar = [];
+  const tagRegex = /<(h1|h2|p)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  let tm;
+  while ((tm = tagRegex.exec(blok)) !== null) {
+    const inner = stripHtmlTags(tm[2]).replace(/\s+/g, ' ').trim();
+    if (inner) parcalar.push(inner);
+  }
+  if (parcalar.length === 0) {
+    return { kaynak: 'web-yok', sebep: 'icerik-bos', query, url: detayUrl };
+  }
+
+  let icerik = decodeKosterEntities(parcalar.join('\n\n')).trim();
+  if (icerik.length > 5000) icerik = icerik.slice(0, 5000) + '…';
+
+  return {
+    kaynak: 'koster-web',
+    url: detayUrl,
+    baslik: decodeKosterEntities(baslikRaw).trim(),
+    icerik,
+    query,
+  };
+}
+
+function kosterQueryHazirla(malzeme) {
+  const stopWords = new Set([
+    '2k', '25', '50', '110', '120', '214', '500', '560', '002',
+    'kg', 'lt', 'ml', 'gr',
+    'set', 'in', 'beyaz',
+  ]);
+  const norm = normalizeKlasorAdi(malzeme);
+  const tokens = norm
+    .split(/[\s\-_]+/)
+    .filter(t => t && t !== 'koster' && !stopWords.has(t));
+  return tokens.slice(0, 3).join(' ');
+}
+
+async function kosterFetch(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function stripHtmlTags(s) {
+  return String(s || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '');
+}
+
+function decodeKosterEntities(s) {
+  const ents = {
+    '&Ouml;': 'Ö', '&ouml;': 'ö',
+    '&Uuml;': 'Ü', '&uuml;': 'ü',
+    '&Ccedil;': 'Ç', '&ccedil;': 'ç',
+    '&Auml;': 'Ä', '&auml;': 'ä',
+    '&szlig;': 'ß',
+    '&amp;': '&', '&quot;': '"', '&nbsp;': ' ',
+    '&#39;': "'", '&apos;': "'",
+  };
+  let out = String(s || '');
+  for (const [k, v] of Object.entries(ents)) {
+    out = out.split(k).join(v);
+  }
+  return out;
 }
 
 // ─── Gemini AI çağrısı ───────────────────────────────────────────────────────
@@ -443,49 +671,121 @@ async function aiRaporUret(env, { yorum, malzeme, fotolar, santiye, alan }) {
 
   const token = await getAccessToken(env);
 
-  // 1) Föy klasörünü listele, fuzzy match ile bul
-  let foyBulundu = false;
-  let foyDosyaAdi = null;
-  let foyBase64 = null;
+  // 1) Drive föy lookup (klasör-eşleme)
+  // foyBulundu semantiği: "AI'ya teknik kaynak iliştirildi mi" — drive-tf VE
+  // koster-web durumlarında true. foyDosyaAdi sadece drive-tf'te dolu çünkü
+  // santiye_raporlar.foy_dosya_adi DB kolonu Drive PDF dosya adına özel.
+  let foyBulundu   = false;
+  let foyDosyaAdi  = null;
+  let foyBase64    = null;
+  let foyKaynak    = 'none';   // drive-tf | tf-yok | none | koster-web | web-yok | ai-general
+  let foyKlasor    = null;
+  let foyWebUrl    = null;
+  let foyWebBaslik = null;
+  let foyWebIcerik = null;     // sadece prompt için, response'a girmiyor
   try {
-    const foyListe = await drivePdfListele(token, DRIVE_FOY_KLASOR_ID);
-    console.log("Toplam PDF sayısı:", foyListe.length);
-    console.log("İlk 5 PDF adı:", foyListe.slice(0, 5).map(p => p.name));
-    const eslesme = foyEslestir(malzeme, foyListe);
-    console.log("Fuzzy match sonucu:", JSON.stringify(eslesme));
-    console.log("Aranan malzeme:", malzeme);
-    console.log("Normalize edilmiş malzeme:", malzeme.toLowerCase().replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').replace(/[ğĞ]/g,'g').replace(/[ıİ]/g,'i'));
-    if (eslesme.eslesme !== 'none') {
-      foyBase64 = await driveDosyaIndir(token, eslesme.id);
+    const { index, cached, buildMs } = await kosterFoyIndexYukle(token);
+    const eslesme = foyEslestir(malzeme, index);
+    console.log("[KAYNAK] Drive eşleşme:", JSON.stringify(eslesme), "cache:", cached, "build_ms:", buildMs);
+    foyKaynak = eslesme.kaynak;
+    foyKlasor = eslesme.klasorAdi || null;
+    if (eslesme.kaynak === 'drive-tf') {
+      foyBase64 = await driveDosyaIndir(token, eslesme.file.fileId);
       foyBulundu = true;
-      foyDosyaAdi = eslesme.name;
+      foyDosyaAdi = eslesme.file.fileName;
+      console.log("[KAYNAK] drive-tf → PDF Gemini'ye yükleniyor:", foyDosyaAdi);
     }
   } catch (e) {
     // Föy hatası raporu engellemez; sadece atla
-    foyBulundu = false;
+    console.error("[KAYNAK] Drive index/eşleşme hatası:", e.message);
+    foyKaynak = 'none';
   }
 
-  // 2) Bağlam metni
+  // 2) Drive bulunamadıysa → KÖSTER web fallback (yalnız KÖSTER ürünleri)
+  if (foyKaynak === 'tf-yok' || foyKaynak === 'none') {
+    const isKoster = normalizeKlasorAdi(malzeme).startsWith('koster');
+    if (isKoster) {
+      console.log("[KAYNAK]", foyKaynak, "→ KÖSTER web aranıyor");
+      try {
+        const web = await kosterWebAra(malzeme);
+        if (web.kaynak === 'koster-web') {
+          foyKaynak    = 'koster-web';
+          foyBulundu   = true;          // AI'ya kaynak iliştirildi (text part)
+          foyWebUrl    = web.url;
+          foyWebBaslik = web.baslik;
+          foyWebIcerik = web.icerik;
+          console.log("[KAYNAK] koster-web başarılı:", web.url);
+        } else {
+          foyKaynak = 'web-yok';
+          console.log("[KAYNAK] web-yok:", web.sebep);
+        }
+      } catch (e) {
+        foyKaynak = 'web-yok';
+        console.error("[KAYNAK] kosterWebAra hatası:", e.message);
+      }
+    } else {
+      foyKaynak = 'ai-general';
+      console.log("[KAYNAK] KÖSTER ürünü değil → ai-general");
+    }
+  }
+
+  // 3) Bağlam metni — kaynağa göre dinamik FÖY DURUMU satırı
   const fotolarDizi = Array.isArray(fotolar) ? fotolar : [];
   const hasarSayisi = fotolarDizi.filter(f => f.type === 'hasar').length;
   const normalSayisi = fotolarDizi.filter(f => f.type !== 'hasar').length;
+
+  const foyDurumuMetni = (() => {
+    if (foyKaynak === 'drive-tf')   return `Ekte (Drive teknik föyü: ${foyDosyaAdi})`;
+    if (foyKaynak === 'koster-web') return `KÖSTER resmi web sitesinden alındı (${foyWebUrl})`;
+    if (foyKaynak === 'tf-yok')     return `Drive klasörü mevcut ama TF dosyası yok (${foyKlasor})`;
+    if (foyKaynak === 'web-yok')    return `Bulunamadı (KÖSTER, hiçbir kaynakta yok)`;
+    if (foyKaynak === 'ai-general') return `Kaynak yok (KÖSTER dışı)`;
+    return 'Bulunamadı';
+  })();
 
   const baglam = [
     `ŞANTİYE: ${santiye || '-'}`,
     `ALAN: ${alan || '-'}`,
     `MALZEME: ${malzeme || '-'}`,
-    `FÖY DURUMU: ${foyBulundu ? `Ekte (${foyDosyaAdi})` : 'Bulunamadı'}`,
+    `FÖY DURUMU: ${foyDurumuMetni}`,
     `KULLANICI BEYANI: ${yorum || '-'}`,
     `HASAR FOTOĞRAFI: ${hasarSayisi} adet`,
     `NORMAL FOTOĞRAF: ${normalSayisi} adet`,
   ].join('\n');
 
-  // 3) Gemini parts: bağlam + (varsa) föy PDF + fotoğraflar
+  // 4) Gemini parts: bağlam + (drive-tf) PDF VEYA (koster-web) text + fotoğraflar
   const parts = [{ text: baglam }];
-  if (foyBase64) parts.push({ inline_data: { mime_type: 'application/pdf', data: foyBase64 } });
+  if (foyBase64) {
+    parts.push({ inline_data: { mime_type: 'application/pdf', data: foyBase64 } });
+  } else if (foyKaynak === 'koster-web' && foyWebIcerik) {
+    parts.push({ text:
+      `\n\nTEKNİK FÖY (web kaynağı)\n` +
+      `Başlık: ${foyWebBaslik || '-'}\n` +
+      `URL: ${foyWebUrl}\n` +
+      `Bu bilgi KÖSTER resmi web sitesinden alınmıştır.\n\n` +
+      foyWebIcerik
+    });
+  }
   for (const f of fotolarDizi) {
     if (f && f.data) parts.push({ inline_data: { mime_type: f.mimeType || 'image/jpeg', data: f.data } });
   }
+
+  // 5) System prompt extension — kaynak türünü AI raporda belirtsin
+  // SABİT SISTEM_PROMPT constant'ına dokunulmuyor; sadece request'te append.
+  // (Geçici yaklaşım — sonraki adımda final wording yapılacak.)
+  const kaynakAciklama = ({
+    'drive-tf':   'Drive teknik föyü (PDF, ekte)',
+    'koster-web': 'KÖSTER resmi web sitesi içeriği (metin, ekte)',
+    'tf-yok':     'Kaynak yok (Drive klasör var, TF eksik)',
+    'web-yok':    'Kaynak yok (Drive ve web aramada bulunamadı)',
+    'ai-general': 'Kaynak yok (KÖSTER dışı ürün)',
+    'none':       'Kaynak yok',
+  })[foyKaynak] || 'Kaynak bilinmiyor';
+
+  const sistemPromptEk =
+    `\n\nBU RAPOR İÇİN KAYNAK: ${kaynakAciklama}\n` +
+    `Raporun "technicalReferences" alanında kullanılan kaynak türünü açıkça belirt. ` +
+    `Web kaynağı kullanıldıysa "KÖSTER resmi web sitesi" ifadesini geçir.`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`;
 
@@ -493,7 +793,7 @@ async function aiRaporUret(env, { yorum, malzeme, fotolar, santiye, alan }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SISTEM_PROMPT }] },
+      systemInstruction: { parts: [{ text: SISTEM_PROMPT + sistemPromptEk }] },
       contents: [{ role: 'user', parts }],
       generationConfig: {
         temperature: 0.3,
@@ -541,8 +841,12 @@ async function aiRaporUret(env, { yorum, malzeme, fotolar, santiye, alan }) {
   return {
     basarili: true,
     rapor,
-    foyBulundu,
-    foyDosyaAdi,
+    foyBulundu,    // true: drive-tf VEYA koster-web (AI'ya kaynak iliştirildi)
+    foyDosyaAdi,   // sadece drive-tf'te dolu (DB foy_dosya_adi kolonuna gider)
+    foyKaynak,     // drive-tf | tf-yok | none | koster-web | web-yok | ai-general
+    foyKlasor,     // tf-yok diagnostiği için
+    foyWebUrl,     // koster-web ise dolu
+    foyWebBaslik,  // koster-web ise dolu
   };
 }
 
