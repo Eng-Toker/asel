@@ -7,8 +7,9 @@
 const DRIVE_FOY_KLASOR_ID = '1-xqiQMId4Xs6KrP6pqB6aZhmbBJXlve0';
 const RAPOR_KOK_KLASOR_ADI = 'Şantiye Raporları';
 
-// Föy index cache key — Worker'ın kendi hostname'i (caches.default şartı).
-const FOY_INDEX_CACHE_URL = 'https://drive-upload.eng-adtoker.workers.dev/__cache/koster-foy-index-v3';
+// Kategori map cache key — Worker'ın kendi hostname'i (caches.default şartı).
+// Lazy lookup: root + 9 kategori yapısı önbelleğe alınır, leaf'ler talep üzerine listelenir.
+const KOSTER_KATEGORI_CACHE_URL = 'https://drive-upload.eng-adtoker.workers.dev/__cache/koster-kategori-v3';
 
 const SISTEM_PROMPT = `Sen ASEL Group bünyesinde çalışan kıdemli bir su yalıtım ve izolasyon
 teknik uzmanısın. Görevin; saha mühendisinin yorumu, ekteki ürün teknik
@@ -66,9 +67,8 @@ export default {
         const tA = Date.now();
         const token = await getAccessToken(env);
         const tB = Date.now();
-        const { index, cached, buildMs } = await kosterFoyIndexYukle(token);
-        const tC = Date.now();
 
+        // Test girdileri — ilk test cold start (kategori map build), sonrakiler cache hit görmeli.
         const testCases = [
           { input: 'KÖSTER KBE Flüssigfolie',     expect: 'drive-tf' },
           { input: 'KÖSTER NB 2000',              expect: 'drive-tf' },
@@ -79,29 +79,38 @@ export default {
           { input: 'Fondolin',                    expect: 'none'     },
           { input: 'KÖSTER Asla Var Olmayan X',   expect: 'none'     },
         ];
-        const tests = testCases.map(tc => {
-          const actual = foyEslestir(tc.input, index);
-          return {
-            input:        tc.input,
-            normalized:   normalizeKlasorAdi(tc.input),
-            expected:     tc.expect,
-            actual:       actual.kaynak,
-            klasorAdi:    actual.klasorAdi || null,
-            tfDosyasi:    actual.file?.fileName || null,
-            sebep:        actual.sebep || null,
-            pass:         actual.kaynak === tc.expect,
-          };
-        });
-
-        const kategoriDagilimi = {};
-        const tfYokListesi = [];
-        for (const [key, val] of Object.entries(index)) {
-          const kat = val.kategori || '(yok)';
-          kategoriDagilimi[kat] = (kategoriDagilimi[kat] || 0) + 1;
-          if (val.tfYok) tfYokListesi.push({ key, klasorAdi: val.klasorAdi, kategori: val.kategori });
+        // SEQUENTIAL — cold/warm farkını ölçmek için (paralel olsa hepsi aynı anda cold görür)
+        const tests = [];
+        for (const tc of testCases) {
+          const ti = Date.now();
+          const actual = await kosterFoyMalzemeBul(token, tc.input);
+          const tj = Date.now();
+          tests.push({
+            input:           tc.input,
+            normalized:      normalizeKlasorAdi(tc.input),
+            expected:        tc.expect,
+            actual:          actual.kaynak,
+            klasorAdi:       actual.klasorAdi || null,
+            tfDosyasi:       actual.file?.fileName || null,
+            sebep:           actual.sebep || null,
+            katmap_cached:   actual.katmap_cached ?? null,
+            katmap_buildMs:  actual.katmap_buildMs ?? null,
+            ms:              tj - ti,
+            pass:            actual.kaynak === tc.expect,
+          });
         }
+        const tC = Date.now();
 
-        // KÖSTER web fallback testleri (paralel)
+        // Kategori dağılımı: kategori map'ten hesapla (testlerden sonra zaten cache'te)
+        const { kategoriler, cached: katCached, buildMs: katBuildMs } = await kosterFoyKategoriMap(token);
+        const kategoriDagilimi = {};
+        for (const kat of Object.values(kategoriler)) {
+          kategoriDagilimi[kat.kategoriAdi] = Object.keys(kat.urunler).length;
+        }
+        const toplamUrunIndex = Object.values(kategoriler)
+          .reduce((acc, kat) => acc + Object.keys(kat.urunler).length, 0);
+
+        // KÖSTER web fallback testleri (paralel) — lazy lookup'tan bağımsız
         const webGirdileri = [
           'KÖSTER TPO Aqua U15',          // Drive'da TF yok, web'de bulunmalı
           'KÖSTER KBE Flüssigfolie',      // web kontrol
@@ -131,21 +140,20 @@ export default {
 
         return new Response(JSON.stringify({
           timings: {
-            token_ms:        tB - tA,
-            index_lookup_ms: tC - tB,
-            build_ms:        cached ? null : buildMs,
-            cached,
-            web_test_ms:     tE - tD,
+            token_ms:         tB - tA,
+            tests_total_ms:   tC - tB,
+            katmap_cached:    katCached,
+            katmap_build_ms:  katCached ? null : katBuildMs,
+            web_test_ms:      tE - tD,
           },
           ozet: {
-            toplam_urun:        Object.keys(index).length,
-            kategori_dagilimi:  kategoriDagilimi,
-            tf_yok_sayisi:      tfYokListesi.length,
-            tf_yok_listesi:     tfYokListesi,
+            toplam_urun_kategori_index: toplamUrunIndex,
+            kategori_dagilimi:          kategoriDagilimi,
+            // tf_yok_listesi & tum_anahtarlar: lazy modda mevcut değil
+            // (her leaf'i scan etmeden bilinemez)
           },
           tests,
           kosterWebTest,
-          tum_anahtarlar: Object.keys(index).sort(),
         }, null, 2), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -433,10 +441,13 @@ function suffixEkle(fileName, denemeNo) {
   return fileName.replace(/\.pdf$/i, `${suffix}.pdf`);
 }
 
-// ─── Föy klasör-eşleme (v3) ──────────────────────────────────────────────────
-// Drive yapısı: root → 9 kategori → 35 ürün (leaf) klasörü → PDF'ler.
-// Her leaf klasör adı app'teki malzeme adıyla 1:1 eşleşir (TR karakter +
-// boşluk + slash normalizasyonu sonrası). TF dosyası leaf içinde aranır.
+// ─── Föy klasör-eşleme (v3 lazy) ─────────────────────────────────────────────
+// Drive yapısı: root → 9 kategori → ~35 ürün (leaf) klasörü → PDF'ler.
+// Lazy lookup:
+//   1. Kategori map cache'lenir: root + 9 kategori = 10 fetch (cache miss).
+//      Map { normKat → { kategoriAdi, kategoriId, urunler: { normUrun → { klasorAdi, klasorId } } } }
+//   2. Aranan malzeme map'te bulunursa, sadece o leaf listelenir (1 fetch) → TF aranır.
+//   3. Sonuç: cache miss = 11 fetch toplam, cache hit = 1 fetch.
 
 function normalizeKlasorAdi(s) {
   return String(s || '')
@@ -455,79 +466,91 @@ function normalizeKlasorAdi(s) {
     .trim();
 }
 
-function foyEslestir(malzeme, index) {
-  const key = normalizeKlasorAdi(malzeme);
-  if (!key) return { kaynak: 'none', sebep: 'malzeme-bos' };
-  const hit = index[key];
-  if (!hit) return { kaynak: 'none', sebep: 'malzeme-listede-yok' };
-  if (hit.tfYok) {
-    return {
-      kaynak:    'tf-yok',
-      sebep:     'klasor-var-tf-eksik',
-      klasorAdi: hit.klasorAdi,
-      kategori:  hit.kategori,
-    };
-  }
-  return {
-    kaynak:    'drive-tf',
-    file:      { fileId: hit.fileId, fileName: hit.fileName },
-    klasorAdi: hit.klasorAdi,
-    kategori:  hit.kategori,
-  };
-}
-
-// Recursive: leaf klasörlere kadar in, leaf'leri index'e koy.
-// Root'tan ilk seviye = kategori adı (kategori parametresine yazılır).
-async function foyIndexBuildRecursive(token, folderId, folderName, kategori) {
-  const items = await driveListele(token, folderId);
-  const subFolders = items.filter(o => o.mimeType === 'application/vnd.google-apps.folder');
-  const pdfs       = items.filter(o => o.mimeType === 'application/pdf');
-
-  // Alt klasör varsa: bu seviye leaf değil, paralel olarak in.
-  if (subFolders.length > 0) {
-    const subResults = await Promise.all(
-      subFolders.map(f => foyIndexBuildRecursive(
-        token,
-        f.id,
-        f.name,
-        // Root → 1. seviye: kategori = f.name. Daha derin: kategori değişmez.
-        kategori === null ? f.name : kategori
-      ))
-    );
-    return Object.assign({}, ...subResults);
-  }
-
-  // Leaf klasör. folderName boşsa (root düz PDF içeriyorsa) atla.
-  if (!folderName) return {};
-
-  const tf = pdfs.find(p => /-TF(-\d+)?\.pdf$/i.test(p.name));
-  const key = normalizeKlasorAdi(folderName);
-  if (tf) {
-    return { [key]: { fileId: tf.id, fileName: tf.name, klasorAdi: folderName, kategori } };
-  }
-  return { [key]: { tfYok: true, klasorAdi: folderName, kategori } };
-}
-
-async function kosterFoyIndexYukle(token) {
-  const cacheKey = new Request(FOY_INDEX_CACHE_URL);
+async function kosterFoyKategoriMap(token) {
+  const cacheKey = new Request(KOSTER_KATEGORI_CACHE_URL);
   const cached = await caches.default.match(cacheKey);
   if (cached) {
-    const index = await cached.json();
-    return { index, cached: true, buildMs: 0 };
+    const kategoriler = await cached.json();
+    return { kategoriler, cached: true, buildMs: 0 };
   }
 
   const t0 = Date.now();
-  const index = await foyIndexBuildRecursive(token, DRIVE_FOY_KLASOR_ID, null, null);
+  // 1) Root listele — 1 fetch
+  const rootItems = await driveListele(token, DRIVE_FOY_KLASOR_ID);
+  const kategoriFolders = rootItems.filter(o => o.mimeType === 'application/vnd.google-apps.folder');
+
+  // 2) 9 kategoriyi paralel listele — 9 fetch
+  const entries = await Promise.all(kategoriFolders.map(async kat => {
+    const items = await driveListele(token, kat.id);
+    const urunFolders = items.filter(o => o.mimeType === 'application/vnd.google-apps.folder');
+    const urunler = {};
+    for (const u of urunFolders) {
+      urunler[normalizeKlasorAdi(u.name)] = { klasorAdi: u.name, klasorId: u.id };
+    }
+    return [normalizeKlasorAdi(kat.name), { kategoriAdi: kat.name, kategoriId: kat.id, urunler }];
+  }));
+
+  const kategoriler = Object.fromEntries(entries);
   const buildMs = Date.now() - t0;
 
-  await caches.default.put(cacheKey, new Response(JSON.stringify(index), {
+  await caches.default.put(cacheKey, new Response(JSON.stringify(kategoriler), {
     headers: {
       'Content-Type':  'application/json',
       'Cache-Control': 's-maxage=3600',
     },
   }));
 
-  return { index, cached: false, buildMs };
+  return { kategoriler, cached: false, buildMs };
+}
+
+async function kosterFoyMalzemeBul(token, malzeme) {
+  const aranan = normalizeKlasorAdi(malzeme);
+  if (!aranan) return { kaynak: 'none', sebep: 'malzeme-bos' };
+
+  const { kategoriler, cached, buildMs } = await kosterFoyKategoriMap(token);
+
+  // Hangi kategoride bu ürün var?
+  let bulunan = null;
+  let kategori = null;
+  for (const kat of Object.values(kategoriler)) {
+    if (kat.urunler[aranan]) {
+      bulunan = kat.urunler[aranan];
+      kategori = kat.kategoriAdi;
+      break;
+    }
+  }
+  if (!bulunan) {
+    return {
+      kaynak:         'none',
+      sebep:          'malzeme-listede-yok',
+      katmap_cached:  cached,
+      katmap_buildMs: buildMs,
+    };
+  }
+
+  // Leaf'i listele (1 fetch), TF dosyasını ara
+  const items = await driveListele(token, bulunan.klasorId);
+  const pdfs = items.filter(o => o.mimeType === 'application/pdf');
+  const tf = pdfs.find(p => /-TF(-\d+)?\.pdf$/i.test(p.name));
+
+  if (tf) {
+    return {
+      kaynak:         'drive-tf',
+      file:           { fileId: tf.id, fileName: tf.name },
+      klasorAdi:      bulunan.klasorAdi,
+      kategori,
+      katmap_cached:  cached,
+      katmap_buildMs: buildMs,
+    };
+  }
+  return {
+    kaynak:         'tf-yok',
+    sebep:          'klasor-var-tf-eksik',
+    klasorAdi:      bulunan.klasorAdi,
+    kategori,
+    katmap_cached:  cached,
+    katmap_buildMs: buildMs,
+  };
 }
 
 // ─── KÖSTER web fallback (koster.com.tr/ara → /<slug>/) ──────────────────────
@@ -684,9 +707,13 @@ async function aiRaporUret(env, { yorum, malzeme, fotolar, santiye, alan }) {
   let foyWebBaslik = null;
   let foyWebIcerik = null;     // sadece prompt için, response'a girmiyor
   try {
-    const { index, cached, buildMs } = await kosterFoyIndexYukle(token);
-    const eslesme = foyEslestir(malzeme, index);
-    console.log("[KAYNAK] Drive eşleşme:", JSON.stringify(eslesme), "cache:", cached, "build_ms:", buildMs);
+    const eslesme = await kosterFoyMalzemeBul(token, malzeme);
+    console.log(
+      "[KAYNAK] Drive lookup:", eslesme.kaynak,
+      "klasor:", eslesme.klasorAdi || '-',
+      "katmap_cached:", eslesme.katmap_cached,
+      "katmap_buildMs:", eslesme.katmap_buildMs,
+    );
     foyKaynak = eslesme.kaynak;
     foyKlasor = eslesme.klasorAdi || null;
     if (eslesme.kaynak === 'drive-tf') {
@@ -697,7 +724,7 @@ async function aiRaporUret(env, { yorum, malzeme, fotolar, santiye, alan }) {
     }
   } catch (e) {
     // Föy hatası raporu engellemez; sadece atla
-    console.error("[KAYNAK] Drive index/eşleşme hatası:", e.message);
+    console.error("[KAYNAK] Drive lookup hatası:", e.message);
     foyKaynak = 'none';
   }
 
