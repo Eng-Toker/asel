@@ -2,7 +2,7 @@
 // Bağımlılıklar: config.js, utils.js, state.js, router.js
 // (data.js, realtime.js, views/projects.js çalışma zamanında çözülür)
 
-import { SB, KEY, H } from "./config.js";
+import { SB, KEY, H, DRIVE_URL } from "./config.js";
 import { app } from "./state.js";
 import { el, toast } from "./utils.js";
 import { tabGec, setIsMisafir } from "./router.js";
@@ -97,12 +97,30 @@ window.girisYap = async () => {
   }
 };
 
-window.misafirGiris = () => {
+window.misafirGiris = async () => {
   const sifre = el("misafir-pass")?.value;
-  if (sifre !== "ASEL2026") { const e = el("login-err"); if (e) e.textContent = "Misafir şifresi hatalı."; return; }
-  _oturum = { email: "guest", ad: "Misafir", rol: "guest", token: null };
-  el("login-screen").style.display = "none";
-  el("bolge-screen").style.display = "flex";
+  const errEl = el("login-err");
+  const btn = el("btn-misafir");
+  if (errEl) errEl.textContent = "";
+  if (!sifre) { if (errEl) errEl.textContent = "Misafir şifresi zorunludur."; return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Doğrulanıyor...'; }
+  try {
+    // P1-8: parola Worker'da PBKDF2 ile doğrulanır. Bundle'da plaintext yok.
+    const r = await fetch(`${DRIVE_URL}/misafirLogin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: sifre }),
+    });
+    const ok = r.ok && (await r.json().catch(() => ({}))).ok === true;
+    if (!ok) { if (errEl) errEl.textContent = "Misafir şifresi hatalı."; return; }
+    _oturum = { email: "guest", ad: "Misafir", rol: "guest", token: null };
+    el("login-screen").style.display = "none";
+    el("bolge-screen").style.display = "flex";
+  } catch {
+    if (errEl) errEl.textContent = "Misafir doğrulaması başarısız. Bağlantınızı kontrol edin.";
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = "👁 Misafir Olarak Görüntüle"; }
+  }
 };
 
 window.bolgeSec = async (bolge) => {

@@ -105,6 +105,50 @@ function corsHeadersFor(request) {
   return headers;
 }
 
+// ─── Misafir parola PBKDF2 verify (P1-8) ───────────────────────────────────
+// Format: pbkdf2-sha256$<iter>$<base64-salt>$<base64-hash>
+// Constant-time compare manuel (Web Crypto'da timingSafeEqual yok).
+// Hash karşılaştırma SADECE Worker'da; frontend ham parolayı POST eder.
+function _b64decode(s) {
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function _ctEquals(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+async function verifyMisafirParola(password, encoded) {
+  if (!encoded || typeof encoded !== "string") return false;
+  const parts = encoded.split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2-sha256") return false;
+  const iter = parseInt(parts[1], 10);
+  if (!Number.isFinite(iter) || iter < 1) return false;
+  let salt, expected;
+  try {
+    salt     = _b64decode(parts[2]);
+    expected = _b64decode(parts[3]);
+  } catch { return false; }
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(String(password || "")),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: iter, hash: "SHA-256" },
+    key,
+    expected.length * 8
+  );
+  return _ctEquals(new Uint8Array(bits), expected);
+}
+
 // ─── PII maskeleme (P1-10) ─────────────────────────────────────────────────
 // Deterministic SHA-256 hash + server-side pepper. Aynı input → aynı çıktı
 // (log correlation için), pepper olmadan offline lookup imkansız (rainbow
@@ -134,6 +178,34 @@ export default {
 
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
+    }
+
+    // ── /misafirLogin ─ misafir parola PBKDF2 verify (P1-8) ──────────────────
+    // Auth-OPEN endpoint (login event'in kendisi). GUEST_PASSWORD_HASH
+    // secret yoksa 500. Hata mesajı timing-safe kalmak için sabit/kısa.
+    // Rate limiting bu endpoint için P3 (brief skip).
+    if (path === '/misafirLogin') {
+      try {
+        if (!env.GUEST_PASSWORD_HASH) {
+          return new Response(JSON.stringify({ ok: false, error: 'GUEST_PASSWORD_HASH yapılandırılmadı' }), {
+            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        const { password } = await request.json().catch(() => ({}));
+        const ok = await verifyMisafirParola(password, env.GUEST_PASSWORD_HASH);
+        if (!ok) {
+          return new Response(JSON.stringify({ ok: false }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch {
+        return new Response(JSON.stringify({ ok: false }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // P0-5: tüm endpoint'ler authenticated Supabase user'ı gerektirir
