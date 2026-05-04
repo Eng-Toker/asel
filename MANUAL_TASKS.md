@@ -374,6 +374,41 @@ curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
 
 ---
 
+## M9 — Cloudflare WAF / Rate Limiting Rule: /misafirLogin
+- **Tip:** Cloudflare Dashboard (kod yok, tek tık)
+- **Önkoşul:** M7 (GUEST_PASSWORD_HASH set), M4/M8 Worker bundle deploy
+- **Bloke ettiği:** /misafirLogin endpoint'inin DoS koruması (PBKDF2 600k iter
+  her istekte ~200-500ms Worker CPU; brute force = CPU sömürüsü).
+- **Karar:** B4 deploy bloker (2026-05-04 user feedback). P3'e öteleme;
+  deploy turunun parçası.
+- **Aksiyon:**
+  1. Cloudflare Dashboard → drive-upload Worker zone'u (workers.dev) →
+     Security → WAF → "Custom rules" veya "Rate limiting rules" → "Create".
+  2. Rule ayarları:
+     - **Field:** URI Path
+     - **Operator:** equals
+     - **Value:** `/misafirLogin`
+     - **Method:** POST
+     - **Rate:** 5 requests / 1 minute / per IP
+     - **Action:** Block (veya Challenge — block tercih edilir)
+     - **Response:** 429 Too Many Requests
+  3. Save & deploy.
+- **Doğrulama:**
+  ```bash
+  # 6 ardışık istek (5'i geçer, 6.sı 429)
+  for i in 1 2 3 4 5 6; do
+    curl -o /dev/null -s -w "req $i: %{http_code}\n" \
+      -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
+      -H "Content-Type: application/json" \
+      -d '{"password":"X"}'
+  done
+  # Beklenen: ilk 5 → 401, 6. → 429
+  ```
+- **Rollback:** WAF rule'u devre dışı bırak veya sil.
+- **Status:** [ ]
+
+---
+
 ## [USER_DECISION_NEEDED] — P1-7 Drive restricted scope ve eski URL migration politikası
 
 **[KARAR: D+errata — P3-DEVİR (2026-05-04 Faz 2 sonu USER_DECISION). Resmi olarak P3 maddesi. AUDIT_FINAL §4 #7 satırında P1 closure yarım değil — taşınmış item.]**
