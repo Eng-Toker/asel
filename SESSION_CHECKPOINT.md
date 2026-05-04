@@ -2,7 +2,7 @@
 
 **Son güncelleme:** 2026-05-04
 **Aktif faz:** Faz 1 — Backend & Infrastructure
-**Aktif madde:** ADIM 7 — P1-7 Drive restricted + signed proxy (USER_DECISION beklenen)
+**Aktif madde:** ADIM 7 — P1-7 Drive restricted + signed proxy — **USER_DECISION_NEEDED**
 
 ## Bu fazda tamamlanan
 - ✓ P1-12 (commit 7b5b8d2) — çift policy konsolidasyonu migration'ı
@@ -10,10 +10,13 @@
 - ✓ OPEN-1 (commit ec8386c) — storage misafir SELECT kapı (kod kanıtıyla)
 - ✓ P1-3 (commit 8c8324d) — Worker CORS Origin whitelist
 - ✓ P1-11 (commit fc3f732) — SISTEM_PROMPT defansif madde
-- ✓ P1-2 (commit _pending_) — Worker /upload file validation
+- ✓ P1-2 (commit 5d2dd58) — Worker /upload file validation
 
 ## Yarım kalan (varsa)
-_(yok)_
+- **ADIM 7 / P1-7** — USER_DECISION_NEEDED. MANUAL_TASKS.md → bloku oku
+  (4 seçenek A/B/C/D). HENÜZ KOD DEĞİŞMEDİ. Karar geldikten sonra: Worker
+  (permissions.create kaldır + /fotoSign + /raporSign) + (eğer B/C ise)
+  frontend 5+ dosya proxy refactor.
 
 ## Bu fazda kalan
 - ADIM 7 — P1-7 Drive restricted + signed proxy (USER_DECISION beklenen — eski URL migration politikası)

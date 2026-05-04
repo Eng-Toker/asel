@@ -44,6 +44,59 @@ order by tablename;
 
 ---
 
+## [USER_DECISION_NEEDED] — P1-7 Drive restricted scope ve eski URL migration politikası
+- **Bağlam:** ADIM 7 başlatma noktasında. Audit P1-7 (W3) "Drive permission `anyone reader` → restricted; signed URL Worker proxy" diyor. İki bağlı karar var:
+  1. Eski (mevcut) Drive dosyalarının `anyone reader` izinleri ne olacak (sıkılaştır mı, bırak mı)?
+  2. Frontend foto/rapor URL'leri Worker proxy'ye geçecek mi (kapsam: detail.js, dashboard.js, lightbox.js, photo.js form preview, rapor.js sonuç ekranı)?
+
+  **Mevcut durum (kanıt):**
+  - `cloudflare-worker.js:176` (foto upload) ve `~821` (raporPdf upload) sonrası `permissions.create({type:'anyone',role:'reader'})`.
+  - Foto fileUrl: `https://drive.google.com/thumbnail?id=<id>&sz=w1000` (line 279).
+  - PDF fileUrl: `https://drive.google.com/file/d/<id>/view` (line 923).
+  - Frontend tüm `<img src="${f.file_url}">` doğrudan Drive thumbnail; rapor sonuç ekranı `window.open(driveSonuc.fileUrl)` doğrudan Drive view.
+  - /fotoIndir endpoint zaten authenticated + ownership (P0-7). Yani **proxy altyapısı kısmen var.** `/raporIndir` benzeri yok — eklemek gerek.
+
+- **Seçenekler:**
+
+  - **A) Sadece backend hazırlığı (yarım çözüm — DEPLOY ETMEYİN):**
+    Worker'da `permissions.create` iki yeri kaldır + `/fotoSign` & `/raporSign` endpoint'leri ekle. Frontend DOKUNULMAZ.
+    - Sonuç: yeni yüklenen fotolar/PDFlar restricted; mevcut frontend img src thumbnail URL ile çekemez → **kırık img**, **kırık PDF link**.
+    - Deploy edilirse production kırılır. Bu seçenek anlamsız — atlamalı.
+
+  - **B) Backend + Frontend (önerim):**
+    Worker: `permissions.create` iki yeri kaldır + `/fotoSign` & `/raporSign` endpoint'leri ekle (auth + ownership; P0-7 pattern'iyle).
+    Frontend: tüm foto img src'leri ve rapor open akışı Worker proxy üzerinden.
+    - **Eski (mevcut) Drive dosyaları:** Drive'da hâlâ `anyone reader` izinli; proxy üzerinden de çekilebilir, doğrudan public URL ile de çekilebilir. Ama frontend artık her zaman proxy kullanır → tek tip akış.
+    - **Yeni Drive dosyaları:** restricted, sadece proxy üzerinden okunur.
+    - Kapsam: cloudflare-worker.js (Worker) + detail.js + dashboard.js + lightbox.js + photo.js (form preview) + rapor.js (sonuç ekranı open) — **5+ frontend dosyası**.
+    - Atomik bir commit'te bunların hepsi gitmeli (yarısı kaldı kalmalı değil).
+    - Deploy: Worker önce, frontend hemen sonra (Pages Direct Upload). Race condition riski düşük (1-2 saniye).
+    - Risk: img src proxy authenticated header gerektiriyor → `<img>` tag basit GET ile auth header eklenemez → token query param gerek (`?token=...`) veya `<img>` yerine `fetch + URL.createObjectURL` pattern'i. **Bu seçim de yapılmalı:**
+      - **B1)** Token query param: `<img src="${DRIVE_URL}/fotoSign?fileId=X&token=${userJWT}">` — basit ama JWT URL'de loglanır.
+      - **B2)** Fetch + blob URL: render anında her foto için `fetch + Bearer header + URL.createObjectURL`. Daha güvenli ama re-render'da memory leak riski (URL.revokeObjectURL gerekir).
+
+  - **C) B + tüm mevcut Drive dosyalarını sıkılaştırma migration'ı:**
+    B + bir kerelik admin işlem: tüm `record_fotograflar.file_id` ve `santiye_raporlar.drive_file_id` setindeki Drive dosyalarına `permissions.delete` çağrısı (anyone reader iznini iptal).
+    - Sonuç: tek tip durum — hepsi restricted, hepsi proxy.
+    - Migration nasıl koşar: Worker'a tek seferlik admin endpoint (env var ile gate'li) veya Apps Script. Kapsam genişler.
+    - Risk: migration yarıda kalırsa karışık state (yarısı public, yarısı restricted, frontend her hâlükârda proxy → public dosyalar da proxy üzerinden çalışır → fonksiyonel sorun olmaz, ama izin durumu karışık kalır).
+
+  - **D) P1-7'yi P2'ye ertele:**
+    Faz 1'de YAPMA. Audit'e errata yaz: "P1-7 kapsam büyüklüğü Faz 1'de tek commit'le risksizce yapılamayacak; P2'ye taşındı."
+    - Risk: Drive enumeration vektörü mevcut public URL'lere açık kalır. /fotoIndir P0-7 ownership ile kapı koydu ama doğrudan thumbnail URL'i bilen herkes görür.
+    - Faz 1 daraltılır, deploy daha küçük blast radius.
+
+- **Önerim: B (B2 alt-seçeneğiyle).** Frontend tarafı genişlemiş ama atomik bir commit. B2 (fetch + blob URL) güvenlik açısından B1'den iyi; revoke pattern doğru kurulursa memory leak yok. Eski public dosyalara dokunulmaz (C ayrı bir Faz 3 işi olabilir, ya da hiç yapılmaz — frontend zaten hep proxy ile çekiyorsa fonksiyonel etkisi yok).
+
+  D de geçerli — Faz 1'i hızlı kapatıp Faz 2'ye geçmek istiyorsan kabul edilebilir. Ama o zaman audit'in P1-7 kapanmamış olur.
+
+- **Bekleme noktası:** Commit 5d2dd58 (P1-2 tamam). cloudflare-worker.js'de `permissions.create` iki yer ve frontend img src'leri HENÜZ DEĞİŞMEDİ. Karar geldiğinde:
+  - **B / B2** seçilirse: 1) Worker (permissions.create kaldır + 2 yeni endpoint), 2) frontend (5+ dosya, blob URL helper) iki ayrı commit; sonra MANUAL_TASKS.M5 (Worker bundled deploy) + M6 (Pages deploy).
+  - **C** seçilirse: B'ye ek olarak Worker admin endpoint + MANUAL_TASKS migration task'ı.
+  - **D** seçilirse: CHANGES_SUMMARY'ye "Ertelenen" kaydı, Faz 1 Worker bundled deploy task'ı sadece P1-3/P1-11/P1-2 için. ADIM 7 görevi atlanır.
+
+---
+
 ## M3 — OPEN-1 storage misafir SELECT policy kapı
 - **Tip:** SQL (Supabase Dashboard) + opsiyonel doğrulama
 - **Önkoşul:** M1, M2 (sırayla)
