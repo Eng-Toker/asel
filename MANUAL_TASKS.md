@@ -273,8 +273,11 @@ order by policyname;
 - **Bloke ettiği:** Worker /maskPII endpoint çalışması — secret yoksa 500.
   M8 deploy'undan ÖNCE secret eklenmeli.
 - **Karar:** Worker SHA-256 hash için server-side pepper. Frontend asla görmez.
-  Bir kerelik üret, asla rotate etme (rotate edilirse tüm cache'ler invalidate
-  olur ve mevcut DB'deki `duzenleyen` hash'leri orphan kalır).
+  Bir kerelik üret. **Compromise olmadıkça rotate etme**; compromise durumunda
+  yeni pepper üret + mevcut DB'deki `duzenleyen` hash'leri orphan kabul edilir
+  (rotation aslında pseudo-anonymization'ı yeniler — eski hash'ler eşleşmez,
+  yeni yazımlar yeni hash, log korelasyonu kesilir ama UX'te dashboard
+  "Admin" hard-mask fallback devreye girer).
 - **Aksiyon:**
   1. Lokalde 32+ karakter rastgele string üret (hex de olur):
      ```bash
@@ -289,12 +292,24 @@ order by policyname;
 - **Doğrulama (M8 deploy'undan sonra):**
 ```bash
 # Authenticated bir JWT ile (admin login + devtools network'ten kopyala)
-curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/maskPII \
-  -H "Authorization: Bearer <jwt>" \
+JWT="<paste-here>"
+URL="https://drive-upload.eng-adtoker.workers.dev/maskPII"
+
+# 1) Tek değer hash format
+curl -s -X POST "$URL" \
+  -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
-  -d '{"values":["test@example.com"]}'
-# Beklenen: 200 + {"masked":["pii:<12 hex>"]}
-# Aynı input → aynı hash (deterministic).
+  -d '{"values":["a@x.com"]}'
+# Beklenen: {"masked":["pii:<12 hex>"]}
+
+# 2) DETERMINISM — aynı input 2 kere = aynı hash
+A1=$(curl -s -X POST "$URL" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d '{"values":["a@x.com"]}')
+A2=$(curl -s -X POST "$URL" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d '{"values":["a@x.com"]}')
+[ "$A1" = "$A2" ] && echo "✓ deterministic" || echo "✗ NOT deterministic ($A1 vs $A2)"
+
+# 3) ANTI-COLLISION — farklı input = farklı hash
+B=$(curl -s -X POST "$URL" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d '{"values":["b@x.com"]}')
+[ "$A1" != "$B" ] && echo "✓ a@x ≠ b@x" || echo "✗ COLLISION ($A1 == $B)"
 ```
 - **Rollback:** Secret'ı sil → /maskPII 500 döner → frontend cache miss
   fallback'leri ("Admin" hard-mask) devreye girer (UX kırılmaz, sadece
