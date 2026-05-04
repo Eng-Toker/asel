@@ -1,0 +1,41 @@
+# .gitattributes — line ending normalization (P1-13)
+# Repo Windows + Linux/macOS karışık platform; LF her yerde standart.
+# Working tree'ye checkout'ta CRLF dönüşümü için core.autocrlf bireysel
+# ayar gerekir; bu dosya checkin'de LF garantisi verir.
+
+# Default: text, LF normalize on commit
+* text=auto eol=lf
+
+# Açıkça text + LF
+*.html  text eol=lf
+*.css   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+.gitignore  text eol=lf
+.cfignore   text eol=lf
+.gitattributes text eol=lf
+
+# Binary — git diff/merge etmesin, line ending dönüşümü yapmasın
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.otf   binary
