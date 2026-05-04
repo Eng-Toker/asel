@@ -108,6 +108,8 @@ function corsHeadersFor(request) {
 // /misafirLogin rate limit Retry-After sabiti — wrangler.toml'daki
 // [[unsafe.bindings]] simple.period değeri ile sync tutulmalı (drift önleme).
 const MISAFIR_LOGIN_RL_PERIOD_SEC = 60;
+// /rapor rate limit Retry-After sabiti — wrangler.toml RAPOR_RL.period sync.
+const RAPOR_RL_PERIOD_SEC = 60;
 
 // ─── Misafir parola PBKDF2 verify (P1-8) ───────────────────────────────────
 // Format: pbkdf2-sha256$<iter>$<base64-salt>$<base64-hash>
@@ -290,8 +292,30 @@ export default {
     }
 
     // ── /rapor ─ AI ile teknik rapor 6 alanı üret (Gemini 2.5 Flash) ──────────
+    // B18: Rate limit (user.sub başına 5 req/60s) — Gemini API paralı çağrı,
+    // spam = cost exhaustion. Defansif: binding yoksa skip (M9 deploy edilmezse
+    // endpoint çalışır ama korunmaz).
     if (path === '/rapor') {
       try {
+        if (env.RAPOR_RL) {
+          const { success } = await env.RAPOR_RL.limit({ key: user.sub });
+          if (!success) {
+            console.warn(JSON.stringify({
+              event: 'rate_limit_triggered',
+              endpoint: '/rapor',
+              user_sub: user.sub,
+              ts: Date.now(),
+            }));
+            return new Response(JSON.stringify({ basarili: false, hata: 'Çok fazla rapor isteği. Bir dakika bekleyin.' }), {
+              status: 429,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
+                'Retry-After': String(RAPOR_RL_PERIOD_SEC),
+              },
+            });
+          }
+        }
         const { yorum, malzeme, fotolar, santiye, alan } = await request.json();
         const sonuc = await aiRaporUret(env, { yorum, malzeme, fotolar, santiye, alan });
         return new Response(JSON.stringify(sonuc), {

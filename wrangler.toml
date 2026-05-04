@@ -29,6 +29,17 @@ type = "ratelimit"
 namespace_id = "1001"
 simple = { limit = 5, period = 60 }
 
+# /rapor rate limit binding (B18)
+# Authenticated user başına 5 req / 60s. Gemini 2.5 Flash multimodal
+# çağrısı paralı (~$0.001-0.005/req); ek olarak Drive API + KÖSTER web
+# scraping CPU+bandwidth maliyeti. Spam = quota/cost exhaustion vektörü.
+# Key: user.sub (auth payload'tan).
+[[unsafe.bindings]]
+name = "RAPOR_RL"
+type = "ratelimit"
+namespace_id = "1002"
+simple = { limit = 5, period = 60 }
+
 # Secret env var'ları wrangler.toml'a YAZILMAZ (gizli):
 #   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN,
 #   DRIVE_KLASOR_ID, GEMINI_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY,
