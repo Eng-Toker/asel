@@ -22,15 +22,31 @@ asel/
     ├── state.js                 app nesnesi (global durum), DURUM, DEF_S/P/M
     ├── utils.js                 el, uid, esc, badgeCls, parseNum, tarihFmt/Kisa, debounce, toast, vb.
     ├── db.js                    dbGet, dbPost, dbPatch, dbDelete, storeDel
+    │                            (P1-5: storeDel artık shared H header — login JWT)
     ├── router.js                tabGec, bnGo, registerRender, setIsMisafir, popstate
+    ├── mask.js                  PII maskeleme wrapper (P1-10)
+    │                            export: maskPII, maskPIIBatch, maskCached
+    │                            Worker /maskPII'a fetch + in-session Map cache.
     ├── auth.js                  oturumYukle, isMisafir, isAdmin, rolGoster, timeoutSifirla
     │                            window: girisYap, misafirGiris, bolgeSec, bolgeGeriDon, cikisYap
+    │                            P1-8: misafirGiris async, parolayı Worker
+    │                            /misafirLogin'e POST eder (PBKDF2 600k verify).
+    │                            P1-10: girisYap'ta KULLANICI_ADLARI map miss →
+    │                            email yerine Worker /maskPII'dan deterministic
+    │                            pii: hash alınır (DB writes hashlenir).
     ├── data.js                  veriYukle, satirToKayit, mkAsama
     ├── realtime.js              realtimeBaslat, realtimeDurdur (Supabase WebSocket)
+    │                            P1-4: bolge sütunlu tablolar için topic-suffix
+    │                            server-side filter (realtime:public:T:bolge=eq.<x>).
+    │                            P1-9: exponential backoff (1s→max 30s),
+    │                            visibility hook (tab visible → reconnect),
+    │                            state resync (refresh on reconnect open).
     ├── photo.js                 sikistir (export), window: kameraAc, fotografEkle, hasarFotoYukle,
     │                            formFotoSil, yeniFotoSil, formFotoBak
     ├── lightbox.js              lbAc, lbKapat, lbSon, lbOnc, lbReset, lbZoom + olay bağlayıcıları
     ├── export.js                window: logExcelIndir, logPdfIndir
+    │                            P1-1: xlsx@0.20.3 SheetJS resmi CDN +
+    │                            integrity SRI (sha384) + crossOrigin.
     ├── views/
     │   ├── projects.js          renderSantiyeler, tumHavaYenile, havaTimerBaslat, stopHavaTimer,
     │   │                        havaTipKapat, window: havaKonumAl, havaTipToggle, onSantiyeAra
@@ -40,8 +56,12 @@ asel/
     │   ├── ayarlar.js           renderAyarlar, window: santiyeDuzenle, santiyeKaydet, santiyeEkle,
     │   │                        santiyeSil, hakkindaAc, hakkindaKapat
     │   │                        registerRender("ayarlar", renderAyarlar)
-    │   └── dashboard.js         renderDashboard
+    │   └── dashboard.js         renderDashboard (async — P1-14)
     │                            registerRender("dashboard", renderDashboard)
+    │                            P1-14: PII preflight (mask.maskPIIBatch),
+    │                            _piiGoster() render-time getter; ham
+    │                            email-like değer cache miss → "Admin"
+    │                            hard-mask fallback.
     └── modals/
         ├── record.js            renderModal (export), sbKaydet, bosForm/bosAsama/asamaEsitle
         │                        window: kayitToggle, santiyeSec, kayitDuzenle, yeniKayitAc,
@@ -74,6 +94,8 @@ asel/
 | `router.js` ↔ `auth.js` | `setIsMisafir(fn)` köprüsü; auth modülü yüklenince enjekte eder |
 | `photo.js` → `modals/record.js` | Dinamik `import()` (renderModal için) |
 | `realtime.js` → tüm view'lar | Dinamik `import()` (refresh debounce içinde) |
+| `auth.js` → `mask.js` | Dinamik `import()` — login flow'da KULLANICI_ADLARI miss durumunda PII hash al |
+| `mask.js` → `auth.js` | `oturumYukle()` import — Worker fetch için Bearer token okunur (login event'in kendisi öncesi mask çağrısı yok) |
 
 ## Deployment
 
@@ -85,3 +107,30 @@ python3 -m http.server 8000
 ```
 
 `type="module"` CORS gerektirir — `file://` protokolüyle çalışmaz, mutlaka HTTP sunucu kullanın.
+
+## Faz 2 modül değişiklikleri (2026-05-04)
+
+| Madde | Modül | Değişiklik |
+|---|---|---|
+| P1-1  | export.js                  | xlsx CDN + SRI |
+| P1-4  | realtime.js                | bolge topic-suffix |
+| P1-9  | realtime.js                | exp backoff + visibility hook |
+| P1-5  | db.js                      | storeDel header H |
+| P1-10 | mask.js (yeni)             | maskPII / maskPIIBatch / maskCached |
+| P1-10 | cloudflare-worker.js       | maskPIIvalue + /maskPII endpoint |
+| P1-10 | auth.js                    | login flow → maskPII for unmapped emails |
+| P1-10 | modals/rapor.js            | console.warn defansif daraltma |
+| P1-14 | views/dashboard.js         | async preflight + _piiGoster fallback |
+| P1-8  | cloudflare-worker.js       | verifyMisafirParola + /misafirLogin |
+| P1-8  | auth.js                    | misafirGiris async, plaintext check silindi |
+| P1-8  | scripts/hash_misafir_pass.mjs (yeni) | PBKDF2-SHA256 600k hash üretici |
+| P1-8  | index.html                 | btn-misafir id eklendi (loading state) |
+
+## Faz 3 modül değişiklikleri (2026-05-04)
+
+| Madde | Modül | Değişiklik |
+|---|---|---|
+| P2-1  | .gitignore (yeni)          | Standart Node/web ignore + .claude/ |
+| P2-1  | .cfignore (yeni)           | Cloudflare Pages deploy exclude |
+| P1-13 | .gitattributes (yeni)      | Line ending normalization (LF) |
+| errata | migrations/2026-05-04_p3_malzemeler_consolidation.sql (yeni) | Tek canonical SELECT policy |

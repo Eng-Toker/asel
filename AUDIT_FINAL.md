@@ -307,6 +307,33 @@ window.notKaydet = async () => {
 
 **P1 toplam:** ~7-9 saat.
 
+### 4.1 P1 KAPANIŞ STATÜSÜ (2026-05-04, Faz 1+2 sonrası)
+
+| # | ID | Status | Commit | Faz |
+|---|---|---|---|---|
+| 1  | E3              | ✓ kod | `46d6c84` | F2 ADIM 1 (P1-1) |
+| 2  | P4              | ✓ kod | `5d2dd58` | F1 (P1-2) |
+| 3  | P6              | ✓ kod | `8c8324d` | F1 (P1-3) |
+| 4  | R2              | ✓ kod | `20e8f10` | F2 ADIM 2 (P1-4) |
+| 5  | D1+D2           | ✓ kod | `8dcdb60` | F2 ADIM 4 (P1-5) — `.catch(()=>{})` brief'in dışı tutuldu (defansif, UI seviyesinde delete butonu misafire gizli) |
+| 6  | B4              | ✓ kod | `e90d193` | F1 (P1-6) USER_DECISION → A (sıkı sahiplik) |
+| 7  | W3              | 🔴 **P3-DEVİR** | — | F1+F2 sonu USER_DECISION D+errata. Detay: §4 #7 satır notu, MANUAL_TASKS USER_DECISION bloğu |
+| 8  | A2              | ✓ kod | `5f6645b` (docs `6a93e13`) | F2 ADIM 5 (P1-8) USER_DECISION → B (PBKDF2 600k, OWASP 2023). Brief'in bcrypt önerisi yerine PBKDF2 — Worker CPU-friendly, NIST-onaylı |
+| 9  | R7              | ✓ kod | `b893e19` | F2 ADIM 3 (P1-9) — exponential backoff 1s→30s, visibility hook, state resync |
+| 10 | L_PII           | ✓ kod | `23b2ddb` | F2 ADIM 6 (P1-10) — partial mask brief'in önerisi yerine SHA-256 + pepper deterministic hash (lookup attack koruması, USER_DECISION) |
+| 11 | A10             | ✓ kod | `fc3f732` | F1 (P1-11) |
+| 12 | Çift policy     | ✓ kod | `7b5b8d2` + errata `de4f471` | F1 (P1-12) + F3 ADIM 11 (malzemeler errata, M1 doğrulama bulgusu) |
+| 13 | C2              | ✓ kod | `353b534` (.gitignore + .cfignore) + `bbe70d0` (.gitattributes) | F3 ADIM 9 + 10 (P2-1 + P1-13 birleşik) |
+| 14 | E_dashboard_PII | ✓ kod | `d406f60` | F2 ADIM 7 (P1-14) — preflight + hard-mask fallback |
+
+**P1 closure özeti:** 13/14 ✓, 1 P3-DEVİR (W3 / P1-7 — yarım kapanış değil, taşınmış item).
+
+**OPEN bulguları kapanış (Faz 1+2+3 boyunca):**
+- OPEN-1 (storage misafir SELECT): ✓ commit `ec8386c` (F1), kod kanıtıyla.
+- OPEN-2..6: §6 ve §11'deki bulgular için Faz 3 ADIM 12 audit kapanışı bu satırları işaret eder; her birinin kod/karar ya da P3 devir notu yukarıdaki tabloda veya MANUAL_TASKS'ta saklı.
+
+**Faz 2'de gezilen modüller (MODULES.md güncelleme için referans):** export.js, realtime.js, db.js, auth.js, mask.js (yeni), modals/rapor.js, views/dashboard.js, cloudflare-worker.js, scripts/hash_misafir_pass.mjs (yeni), index.html.
+
 ---
 
 ## 5. P2 LİSTESİ (sprint)
