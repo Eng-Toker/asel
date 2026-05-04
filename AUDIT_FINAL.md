@@ -662,6 +662,34 @@ Avantaj: client tarafında `bolge=eq.X` filter manuel zorunlu olmaz; bypass'lanm
 **Şu an:** Ad-hoc audit (bu rapor).
 **Önerilen:** 6 ayda bir tekrar audit (en az; depend yenileme + RLS doğrulama). CI'da haftalık `npm audit` (build step kurulduktan sonra) ve `pg_policies` snapshot diff.
 
+### 11.9 santiye_raporlar.hazirlayan_email PII storage tradeoff (B14, AUDIT_REVIEW)
+
+**Durum (2026-05-04):** `santiye_raporlar.hazirlayan_email` kolonu **raw email** tutuyor. P1-10 ile log'da PII mask uygulandı (duzenleyen → "Admin" / "pii:hash"), ama raporlar tablosunda email plain.
+
+**Gerekçe:** P1-6 RLS policy `hazirlayan_email = auth.jwt() ->> 'email'` ile kullanıcının kendi raporlarını filter ediyor. Hash kullanırsak (SHA256+pepper) RLS bozulur (auth.jwt() pepper bilmediği için match edemez).
+
+**Kabul edilen tradeoff:** Raporlar tablosunda email plain — RLS sahiplik kontrolü işlevsel. Log tablosunda mask — analitik PII koruma.
+
+**USER_DECISION (S4, AUDIT_REVIEW.md §9, 2026-05-04):**
+> "mail e göre isim belirleriz sonra"
+
+**Yorumu:** Mevcut raw email kabul + ileride bir "email→display name" lookup mekanizması kurulacak (P3 işi). Olası implementasyon:
+- Worker'a `/whoami?email=X` endpoint → KULLANICI_ADLARI map server-side
+- Veya Supabase `users_meta (email, display_name)` tablosu
+- Veya frontend cache: `hazirlayan_email` raw → render-time map lookup
+
+**Risk profili:**
+- ✅ RLS işlevsel, sahiplik enforcement aktif.
+- ⚠ DB compromise senaryosunda admin email'leri açığa çıkar (2-3 admin, KVKK kapsamı dar).
+- ⚠ Email rotation senaryosu (B33): admin email değişirse eski raporlar erişilemez. Manuel SQL UPDATE gerekir.
+
+**P3 önerisi:**
+- A) UUID-bazlı RLS migration (`hazirlayan_user_id uuid` kolonu, `auth.uid()` match) — email rotation etkilemez.
+- B) `hazirlayan_email_hash` kolonu (deterministic SHA256+pepper) + RLS hash match.
+- C) Mevcut + email→ad lookup endpoint (S4 cevabı doğrultusunda).
+
+**Bu turun aksiyonu:** Hiçbir kod/migration değişikliği yok — bu doc-only fix. P3 turunda yukarıdaki üç seçenekten biri seçilecek.
+
 ---
 
 ## EK A — Audit boyunca kullanılan referanslar
