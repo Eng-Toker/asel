@@ -2,17 +2,17 @@
 
 **Son güncelleme:** 2026-05-04
 **Aktif faz:** Faz 1 — Backend & Infrastructure
-**Aktif madde:** ADIM 3 — OPEN-1 misafir_foto_okuma analizi
+**Aktif madde:** FAZ 1 yarısı (3/7) bitti — sıradaki ADIM 4 (P1-3 Worker CORS)
 
 ## Bu fazda tamamlanan
 - ✓ P1-12 (commit 7b5b8d2) — çift policy konsolidasyonu migration'ı
-- ✓ P1-6 (commit _pending_) — santiye_raporlar RLS sıkı sahiplik (USER_DECISION → A)
+- ✓ P1-6 (commit e90d193) — santiye_raporlar RLS sıkı sahiplik (USER_DECISION → A)
+- ✓ OPEN-1 (commit _pending_) — storage misafir SELECT kapı (kod kanıtıyla)
 
 ## Yarım kalan (varsa)
 _(yok)_
 
 ## Bu fazda kalan
-- ADIM 3 — OPEN-1 misafir_foto_okuma analizi
 - ADIM 4 — P1-3 Worker CORS Origin whitelist
 - ADIM 5 — P1-11 SISTEM_PROMPT defansif cümle
 - ADIM 6 — P1-2 Worker file validation
