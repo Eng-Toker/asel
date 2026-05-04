@@ -5,6 +5,57 @@
 
 ---
 
+## M-1 — Default branch `main` rename (PRE-DEPLOY)
+- **Tip:** GitHub UI + lokal git (kod yok)
+- **Önkoşul:** yok — M0'dan önce yapılır
+- **Bloke ettiği:** repo hijyeni (default branch klasik adlandırma).
+  Deploy turunun parçası, P3'e ötelenmez.
+- **Karar:** B6 deploy bloker (2026-05-04 user feedback). Push işlemi
+  Cloudflare Pages auto-deploy trigger'ını TEHLİKEYE atabilir; bu
+  yüzden CC otomatik push yapmıyor — kullanıcı kontrollü adımlar.
+- **Önkoşul kontrolü (push'tan önce!):**
+  Cloudflare Pages → santiye-takipp projesi → Settings → Build &
+  deployments → Production branch ayarı:
+  - Eğer `main` ise: main branch push'u OTOMATİK PROD DEPLOY tetikler.
+    Bu durumda M1-M9 deploy turunun ARDINDAN main rename yapılmalı,
+    aksi halde working tree çok değişiklikle tek seferde prod'a gider.
+  - Eğer `claude/refactor-code-cleanup-9HnhE` ise: rename'den önce
+    Cloudflare ayarını da güncellemek gerek (yeni branch'i Production
+    olarak işaretle). Sıra: rename → Cloudflare branch ayarı.
+- **Aksiyon (önerilen sıra):**
+  1. **Lokal:** Mevcut branch'in HEAD'inden `main` oluştur:
+     ```bash
+     git fetch origin
+     git branch main claude/refactor-code-cleanup-9HnhE
+     git push origin main
+     ```
+  2. **GitHub UI:** Settings → Branches → Default branch → Switch to
+     `main` → Update. (Confirm dialog'u kabul et.)
+  3. **Cloudflare Pages UI** (gerekirse): Production branch'i `main`'e
+     güncelle. Save.
+  4. **Lokal cleanup:**
+     ```bash
+     git checkout main
+     git branch -d claude/refactor-code-cleanup-9HnhE
+     git push origin --delete claude/refactor-code-cleanup-9HnhE
+     ```
+- **Doğrulama:**
+  ```bash
+  git remote show origin | grep "HEAD branch"
+  # Beklenen: HEAD branch: main
+  ```
+  GitHub UI: repo ana sayfada branch dropdown'u `main`'i göstermeli.
+- **Rollback:** GitHub UI'dan default branch'i eski branch'e çevir.
+  Branch silinmediyse hala remote'ta, dönüş kolay.
+- **Notlar:**
+  - Açık PR varsa bunlar otomatik `main`'e re-target edilir (GitHub
+    bu işi yapar, manuel müdahale gerekmez).
+  - Tüm açık ortamlarda `git checkout main` + `git branch -u
+    origin/main main` ile upstream güncellensin.
+- **Status:** [ ]
+
+---
+
 ## M0 — PRE-DEPLOY CHECK: legacy duzenleyen değerleri (UX riski)
 - **Tip:** SQL inceleme (Supabase Dashboard, write yok)
 - **Önkoşul:** yok — TÜM M*'dan önce bu çalıştırılır
