@@ -8,7 +8,9 @@ export const esc = (s) =>
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/`/g, "&#96;");
 
 export const badgeCls = (d) =>
   d === "Tamamlandı" ? "badge-done" : d === "Devam Ediyor" ? "badge-progress" : "badge-wait";
