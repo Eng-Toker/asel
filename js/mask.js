@@ -3,8 +3,7 @@
 // Pepper Worker'da; frontend asla görmez. Aynı değer için aynı çıktı.
 // Format: "pii:<12 hex>" (48-bit identifier — display için yeterince unique).
 
-import { DRIVE_URL } from "./config.js";
-import { oturumYukle } from "./auth.js";
+import { DRIVE_URL, H } from "./config.js";
 
 const _cache = new Map();
 
@@ -34,10 +33,11 @@ export async function maskPIIBatch(values) {
   const missing = [...new Set(sValues.filter((v) => v && !_cache.has(v)))];
 
   if (missing.length) {
-    const oturum = oturumYukle();
-    const token = oturum?.token;
-    if (!token) {
-      // Auth yok → hash hesaplanamaz; cache'e koymadan input'ları dön.
+    // Bearer header H'dan okunur — login flow'da H Object.assign ile
+    // user JWT'ye set edilmiş olmalı (auth.js girisYap). _oturum set
+    // edilmeden de token erişilebilir (race fix B2).
+    const auth = H?.Authorization || "";
+    if (!auth.startsWith("Bearer ")) {
       return sValues;
     }
     for (let i = 0; i < missing.length; i += 100) {
@@ -45,7 +45,7 @@ export async function maskPIIBatch(values) {
       try {
         const r = await fetch(`${DRIVE_URL}/maskPII`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          headers: { "Content-Type": "application/json", Authorization: auth },
           body: JSON.stringify({ values: chunk }),
         });
         if (!r.ok) continue;

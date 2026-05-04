@@ -72,12 +72,13 @@ window.girisYap = async () => {
   try {
     const data = await supabaseGiris(email, sifre);
     // Token'ı önce H'a yaz — maskPII fetch'i bu header'ı kullanır.
+    // _oturum atomik atanır: ad hesaplanmadan _oturum SET EDİLMEZ
+    // (ara durumda "Admin" placeholder okunup DB'ye yazılma race'i önlenir).
     Object.assign(H, tokenliHeader(data.access_token));
     let ad = KULLANICI_ADLARI[email];
     if (!ad) {
       // Map'te yok → bundle'da local-part göstermek yerine deterministic
       // pii: hash al (Worker secret pepper). Hata olursa "Admin" hard-mask.
-      _oturum = { email, ad: "Admin", rol: "admin", token: data.access_token };
       try {
         const { maskPII } = await import("./mask.js");
         const masked = await maskPII(email);

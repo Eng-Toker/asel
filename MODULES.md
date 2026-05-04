@@ -27,6 +27,8 @@ asel/
     ├── mask.js                  PII maskeleme wrapper (P1-10)
     │                            export: maskPII, maskPIIBatch, maskCached
     │                            Worker /maskPII'a fetch + in-session Map cache.
+    │                            Bearer token H'dan okunur (auth.js bağımsız —
+    │                            B2 race fix için _oturum'a güvenmez).
     ├── auth.js                  oturumYukle, isMisafir, isAdmin, rolGoster, timeoutSifirla
     │                            window: girisYap, misafirGiris, bolgeSec, bolgeGeriDon, cikisYap
     │                            P1-8: misafirGiris async, parolayı Worker
@@ -95,7 +97,7 @@ asel/
 | `photo.js` → `modals/record.js` | Dinamik `import()` (renderModal için) |
 | `realtime.js` → tüm view'lar | Dinamik `import()` (refresh debounce içinde) |
 | `auth.js` → `mask.js` | Dinamik `import()` — login flow'da KULLANICI_ADLARI miss durumunda PII hash al |
-| `mask.js` → `auth.js` | `oturumYukle()` import — Worker fetch için Bearer token okunur (login event'in kendisi öncesi mask çağrısı yok) |
+| `mask.js` token kaynağı | `config.H.Authorization` (auth.js'e bağımlılık YOK; race fix B2 için oturum bağımsız okuma) |
 
 ## Deployment
 
