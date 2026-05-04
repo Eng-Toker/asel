@@ -3,11 +3,12 @@
 import { SB, KEY } from "./config.js";
 import { app }     from "./state.js";
 import { debounce } from "./utils.js";
-import { oturumYukle } from "./auth.js";
+import { oturumYukle, isMisafir } from "./auth.js";
 
 let _realtimeChannel = null;
 
 export function realtimeBaslat() {
+  if (isMisafir()) return;
   if (_realtimeChannel) return;
   const token  = oturumYukle()?.token || KEY;
   const wsUrl  = SB.replace("https://", "wss://") + "/realtime/v1/websocket?apikey=" + KEY + "&vsn=1.0.0";
