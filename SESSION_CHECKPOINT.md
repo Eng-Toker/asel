@@ -16,6 +16,10 @@
 - ✓ B7 (commit a76336c) — smoke.sh +3 case (RLS, CORS keskin, WS heartbeat)
 - ✓ NIT'ler (commit 304b4d1) — B1 BEGIN/COMMIT, B3 3-tablo genişlet,
   B6 Pages adımı sil, B7 Test 8 sıkı + Test 10 ws precheck
+- ✓ B4-NIT (commit ca7a31a) — Worker rate limit hijyeni:
+  CF-Connecting-IP yoksa 400 (randomUUID önerisi REDDEDİLDİ — rate
+  limit'i kırardı), console.warn JSON log, RETRY_AFTER const.
+  M9 doğrulamaya UYARI + RUN_RL_TEST=1 opsiyonel flag pattern.
 
 ## Faz 3'te tamamlanan
 - ✓ ADIM 9  / P2-1  (commit 353b534) — .gitignore + .cfignore + repo docs track
