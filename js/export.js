@@ -1,7 +1,8 @@
 // export.js — Log dışa aktarma (Excel, PDF)
 
 import { app } from "./state.js";
-import { el, toast } from "./utils.js";
+import { el, esc, toast } from "./utils.js";
+import { isMisafir } from "./auth.js";
 
 function filtreliSatirlar() {
   const sF = el("log-filter-santiye")?.value || "";
@@ -15,7 +16,13 @@ function filtreliSatirlar() {
   });
 }
 
+const safeCell = (v) => {
+  const s = String(v ?? "");
+  return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+};
+
 window.logExcelIndir = async () => {
+  if (isMisafir()) { toast("Misafir export edemez", "warn"); return; }
   if (!window.XLSX) {
     toast("Excel kütüphanesi yükleniyor...", "info", 1500);
     await new Promise((res, rej) => {
@@ -36,14 +43,14 @@ window.logExcelIndir = async () => {
       return [
         d ? d.toLocaleDateString("tr-TR") : "",
         d ? d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "",
-        s.duzenleyen || "—",
-        s.santiye || "",
-        s.alan || "",
+        safeCell(s.duzenleyen || "—"),
+        safeCell(s.santiye || ""),
+        safeCell(s.alan || ""),
         "Aşama " + s.asama,
-        s.malzeme || "",
-        s.durum || "",
+        safeCell(s.malzeme || ""),
+        safeCell(s.durum || ""),
         s.metraj != null ? Number(s.metraj) : "",
-        (s.personeller || []).join(", "),
+        safeCell((s.personeller || []).join(", ")),
       ];
     }),
   ];
@@ -56,6 +63,7 @@ window.logExcelIndir = async () => {
 };
 
 window.logPdfIndir = () => {
+  if (isMisafir()) { toast("Misafir export edemez", "warn"); return; }
   const satirlar = filtreliSatirlar();
   if (!satirlar.length) { toast("Dışa aktarılacak kayıt yok", "warn"); return; }
   const w = window.open("", "_blank");
@@ -74,22 +82,23 @@ window.logPdfIndir = () => {
   @media print{body{margin:10px}}
 </style></head><body>
 <h2>Şantiye İş Takip — Log</h2>
-<div class="meta">Oluşturma: ${new Date().toLocaleString("tr-TR")} · ${satirlar.length} kayıt</div>
+<div class="meta">Oluşturma: ${esc(new Date().toLocaleString("tr-TR"))} · ${satirlar.length} kayıt</div>
 <table><thead><tr>
   <th>Tarih</th><th>Saat</th><th>Düzenleyen</th><th>Şantiye</th><th>Uygulama Alanı</th><th>Aşama</th>
   <th>Malzeme</th><th>Durum</th><th>Metraj</th><th>Personel</th>
 </tr></thead><tbody>
 ${satirlar.map((s) => {
     const d = s.tarih ? new Date(s.tarih) : null;
+    const durumCls = s.durum === "Tamamlandı" ? "done" : s.durum === "Devam Ediyor" ? "progress" : "wait";
     return `<tr>
-    <td>${d ? d.toLocaleDateString("tr-TR") : "—"}</td>
-    <td>${d ? d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
-    <td><b>${s.duzenleyen || "—"}</b></td>
-    <td>${s.santiye || ""}</td><td>${s.alan || ""}</td><td>Aşama ${s.asama}</td>
-    <td>${s.malzeme || "—"}</td>
-    <td><span class="badge ${s.durum === "Tamamlandı" ? "done" : s.durum === "Devam Ediyor" ? "progress" : "wait"}">${s.durum}</span></td>
-    <td>${s.metraj != null ? s.metraj + " m²" : "—"}</td>
-    <td>${(s.personeller || []).join(", ") || "—"}</td>
+    <td>${d ? esc(d.toLocaleDateString("tr-TR")) : "—"}</td>
+    <td>${d ? esc(d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })) : "—"}</td>
+    <td><b>${esc(s.duzenleyen || "—")}</b></td>
+    <td>${esc(s.santiye || "")}</td><td>${esc(s.alan || "")}</td><td>Aşama ${esc(s.asama)}</td>
+    <td>${esc(s.malzeme || "—")}</td>
+    <td><span class="badge ${durumCls}">${esc(s.durum || "")}</span></td>
+    <td>${s.metraj != null ? esc(s.metraj + " m²") : "—"}</td>
+    <td>${esc((s.personeller || []).join(", ") || "—")}</td>
   </tr>`;
   }).join("")}
 </tbody></table>
