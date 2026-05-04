@@ -41,13 +41,15 @@ async function sbKaydet(form, duzId) {
   if (duzId) { const d = await dbPatch("santiye_records", `id=eq.${duzId}`, satir); recId = d[0].id; }
   else        { const d = await dbPost("santiye_records", satir); recId = d[0].id; }
 
-  await dbDelete("record_asamalar", `record_id=eq.${recId}`).catch(() => {});
+  // B12: silent catch kaldırıldı — fail outer try-catch'e gider, kullanıcı
+  // toast ile haberdar olur. Atomicity yok ama transparency var.
+  await dbDelete("record_asamalar", `record_id=eq.${recId}`);
   if (as.length) {
     await dbPost("record_asamalar", as.map((a, i) => ({
       record_id: recId, sira_no: i + 1, malzeme: a.malzeme || null,
       uygulama_notu: a.not || null, metraj: parseNum(a.metraj),
       durum: a.durum || "Beklemede", personeller: a.personeller || [],
-    }))).catch(() => {});
+    })));
   }
 
   const eskiKayit = app.kayitlar.find((r) => r.id === recId);
@@ -67,12 +69,14 @@ async function sbKaydet(form, duzId) {
     personeller: a.personeller || [], duzenleyen: oturumYukle()?.ad || null,
     bolge: app.bolge || "İskele",
   }));
-  if (logRows.length) await dbPost("santiye_log", logRows).catch(() => {});
+  // B12: log + foto silme silent catch kaldırıldı. Log fail = audit gap,
+  // foto silme fail = orphan asset — ikisi de görünür olmalı.
+  if (logRows.length) await dbPost("santiye_log", logRows);
 
   for (const a of as)
     for (const f of a.silinecek || []) {
-      if (f.file_path) await storeDel([f.file_path]).catch(() => {});
-      await dbDelete("record_fotograflar", `id=eq.${f.id}`).catch(() => {});
+      if (f.file_path) await storeDel([f.file_path]);
+      await dbDelete("record_fotograflar", `id=eq.${f.id}`);
     }
 
   for (let i = 0; i < as.length; i++)
