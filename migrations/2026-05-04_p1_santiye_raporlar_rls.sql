@@ -20,11 +20,30 @@
 -- ÇALIŞTIRMA: Supabase Dashboard → SQL Editor.
 -- IDEMPOTENT: Evet (drop if exists + create).
 
--- ── Eski policy'leri drop ───────────────────────────────────────────────
-drop policy if exists "raporlar_read"  on santiye_raporlar;
-drop policy if exists "raporlar_write" on santiye_raporlar;
-drop policy if exists "rap_select"     on santiye_raporlar;
-drop policy if exists "rap_insert"     on santiye_raporlar;
+-- ── Eski policy'leri drop (bilinen ad varyantları) ─────────────────────
+drop policy if exists "raporlar_read"   on santiye_raporlar;
+drop policy if exists "raporlar_write"  on santiye_raporlar;
+drop policy if exists "rap_select"      on santiye_raporlar;
+drop policy if exists "rap_insert"      on santiye_raporlar;
+drop policy if exists "Raporlar Read"   on santiye_raporlar;
+drop policy if exists "Raporlar Write"  on santiye_raporlar;
+drop policy if exists "santiye_raporlar_select" on santiye_raporlar;
+drop policy if exists "santiye_raporlar_insert" on santiye_raporlar;
+
+-- ── Defansif: santiye_raporlar üzerinde kalan TÜM policy'leri drop et
+--    (bilinmeyen ad ya da legacy prod state için — P1-12 pattern'i)
+do $$
+declare r record;
+begin
+  for r in
+    select policyname
+    from pg_policies
+    where schemaname = 'public'
+      and tablename  = 'santiye_raporlar'
+  loop
+    execute format('drop policy if exists %I on santiye_raporlar', r.policyname);
+  end loop;
+end $$;
 
 -- ── Yeni canonical policy'ler ──────────────────────────────────────────
 create policy "rap_select" on santiye_raporlar

@@ -53,8 +53,12 @@ order by tablename;
   okur. Future multi-admin görünürlüğü için P2 `user_bolgeleri` (AUDIT §11.2).
 - **Aksiyon:**
   1. Supabase Dashboard → SQL Editor aç
-  2. `migrations/2026-05-04_p1_santiye_raporlar_rls.sql` içeriğini tek seferde çalıştır
-  3. Çıktıda hata olmadığını doğrula
+  2. **DRY-RUN ÖNCE:** Tüm SQL'i `BEGIN; <SQL>; ROLLBACK;` ile sar ve çalıştır.
+     Hata yok ise commit'sız geri dönüş — production state değişmez ama
+     conflict / sözdizimi hatası şimdi tespit edilir.
+  3. Dry-run temiz ise: `migrations/2026-05-04_p1_santiye_raporlar_rls.sql`
+     içeriğini tek seferde çalıştır (BEGIN/ROLLBACK olmadan)
+  4. Çıktıda hata olmadığını doğrula
 - **Doğrulama:**
 ```sql
 -- 1) Policy listesi (rap_select + rap_insert beklenir, başka yok)
