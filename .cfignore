@@ -1,0 +1,39 @@
+# .cfignore — Cloudflare Pages deploy exclude
+# Bu dosyalar Pages projesine yüklenmez (statik build context dışı).
+# Çalışma zamanında frontend'in ihtiyaç duymadığı her şey buraya.
+
+# Claude Code lokal config
+.claude/
+
+# Proje docs (frontend bu dosyalara erişmez)
+*.md
+!index.html
+docs/
+HANDOFF.md
+AUDIT_FINAL.md
+AUDIT_GRUP1-5_OZET.md
+MANUAL_TASKS.md
+CHANGES_SUMMARY.md
+SESSION_CHECKPOINT.md
+
+# SQL migration'ları frontend için yok — Supabase Dashboard'dan çalıştırılır
+migrations/
+
+# Worker dosyaları (ayrı deploy)
+cloudflare-worker.js
+wrangler.toml
+.wrangler/
+
+# Üretim script'leri (frontend bundle değil)
+scripts/
+
+# Editor / OS / VCS
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+node_modules/
+*.log

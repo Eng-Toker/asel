@@ -1,0 +1,54 @@
+# Node / npm (proje şu an tool-free; ileride paket manager girerse hazır olsun)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build / dist (yok ama proaktif)
+dist/
+build/
+out/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*.tmp
+*~
+
+# Logs
+*.log
+logs/
+
+# Test / coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Cloudflare wrangler local state
+.wrangler/
+
+# Untracked proje docs (Faz 3 ADIM 9 — .cfignore deploy exclude eder, .gitignore TUTAR):
+# - .claude/                 → Claude Code lokal config (TRACK ETME)
+# - AUDIT_FINAL.md           → audit dökümanı (track edilmeli, edildi)
+# - AUDIT_GRUP1-5_OZET.md    → audit özet (TRACK ET — sonraki commit'te)
+# - HANDOFF.md               → handoff notu (TRACK ET — sonraki commit'te)
+# Sadece .claude/ git'ten dışlanır, diğerleri repo dökümanları.
+.claude/
