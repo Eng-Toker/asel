@@ -1,8 +1,41 @@
 # SESSION_CHECKPOINT.md
 
 **Son güncelleme:** 2026-05-04
-**Aktif faz:** **FAZ 2 + FAZ 3 TAMAMLANDI + DEPLOY BLOKER'LAR (B1-B7) KAPATILDI**
-**Aktif madde:** _yok — kullanıcı manuel deploy turuna hazır (M-1, M0, M1-M9)_
+**Aktif faz:** **FAZ 2+3 + B1-B7 + AUDIT_REVIEW (sıfırdan tam audit) + 14 CFIX TAMAMLANDI**
+**Aktif madde:** _yok — kullanıcı manuel deploy turuna hazır (M-1, M0, M1-M2.5-M3-...-M9)_
+
+## AUDIT_REVIEW + Faz B/C/D fix turu (2026-05-04, ikinci audit)
+- ✓ **Sıfırdan tam audit** (commit f2500c5) — 51 bulgu, 16 ÖNEMLİ + 35 NIT,
+  4 USER_DECISION. Brief Section A-F tam coverage.
+- ✓ S3 (B2) → A — login REDDET (commit c0f71c7)
+- ✓ S4 (B14+B33) → "mail e göre isim belirleriz sonra" — mevcut raw email
+  kabul + email→ad lookup P3 devir (commit 5a0777d doc-only)
+- ✓ S6 (MIMARI.md) → C .gitignore (commit dae1d18)
+- ✓ S1, S2 doğrulamaları kullanıcıdan beklenmekte (curl + Supabase SQL)
+
+### CFIX commit'leri (14)
+- ✓ CFIX-1 (commit 7e71636) — _redirects ile B38 mitigation
+- ✓ CFIX-2 (commit dae1d18) — MIMARI.md .gitignore (S6)
+- ✓ CFIX-3 (commit ddc8d7e) — B17 PBKDF2 iter upper-bound 1.5M
+- ✓ CFIX-4 (commit 2641ccb) — B32 santiye_log immutable migration
+- ✓ CFIX-5 (commit a4c2263) — B43 html2canvas + jspdf SRI hash
+- ✓ CFIX-6 (commit a0013c1) — B42 PWA manifest icons kaldır
+- ✓ CFIX-7 (commit 3c6afcc) — B34 5 migration BEGIN/COMMIT
+- ✓ CFIX-8 (commit 3971ed9) — B47 smoke test 6 PBKDF2 timing assertion
+- ✓ CFIX-9 (commit 02fadc9) — B1 storeDel HTTP error throw
+- ✓ CFIX-10 (commit a4affd1) — B12 sbKaydet silent catch kaldır
+- ✓ CFIX-11 (commit 7c30f81) — B10 PII mask helper paylaşılan modül
+- ✓ CFIX-12 (commit 0e43dfa) — B18 /rapor rate limit binding
+- ✓ CFIX-13 (commit c0f71c7) — B2 (S3=A) auth.js login REDDET
+- ✓ CFIX-14 (commit 5a0777d) — B14 tradeoff doc AUDIT_FINAL §11.9
+- ✓ MANUAL_TASKS güncel (commit 498bebf) — M2.5 + M9 RAPOR_RL
+
+### Bekleyen kullanıcı doğrulamaları
+- **S1 (B38 KOŞULLU BLOCKER):** `curl -I https://santiye-takipp.pages.dev/AUDIT_FINAL.md`
+  - 200 → SIZINTI tespit, _redirects deploy zorunlu (CFIX-1 zaten kapsıyor)
+  - 404 → İYİ, NIT'e düşer
+- **S2 (B49):** `select count(*) from santiye_raporlar;` Supabase'de
+  - 42P01 hatası → baseline migration (2026-05-02) eksik, M2'den önce çalıştır
 
 ## Deploy bloker'lar (2026-05-04, kullanıcı feedback)
 - ✓ B1 (commit fc5681a) — M2 defansif DROP POLICY DO bloğu + dry-run talimatı
