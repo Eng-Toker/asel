@@ -19,6 +19,10 @@
 -- ÇALIŞTIRMA: Supabase Dashboard → SQL Editor.
 -- IDEMPOTENT: Evet (drop if exists + DO bloğu defansif tarama).
 -- BLOKE EDEN: M1, M2, M3 (DB tarafı sıralı; secret/Worker'dan bağımsız).
+-- B34: Tüm DDL tek transaction içinde — yarı uygulama imkansız.
+-- Dry-run için: aşağıdaki commit; → rollback; çevir, çalıştır, sonra geri al.
+
+begin;
 
 -- ── Bilinen ad varyantlarını drop et ───────────────────────────────────
 drop policy if exists "okuma"            on malzemeler;
@@ -47,6 +51,8 @@ end $$;
 create policy "malzemeler_select" on malzemeler
   for select to anon, authenticated
   using (true);
+
+commit;
 
 -- ── Doğrulama sorguları ────────────────────────────────────────────────
 -- 1) malzemeler'de yalnızca tek SELECT policy kalmalı

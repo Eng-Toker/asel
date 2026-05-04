@@ -10,6 +10,9 @@
 --
 -- ÇALIŞTIRMA: Supabase Dashboard → SQL Editor → çalıştır.
 -- Idempotent: Birden fazla çalıştırılabilir (zaten dolu olanlara dokunmaz).
+-- B34: Tüm UPDATE'ler tek transaction içinde — kısmi backfill imkansız.
+
+begin;
 
 -- 1) thumbnail formatı:  ...?id=XXX&sz=...   →  XXX
 update record_fotograflar
@@ -31,6 +34,8 @@ set    file_id = substring(file_url from '/d/([^/?#=]+)')
 where  file_id is null
   and  file_url is not null
   and  file_url ~ '/d/';
+
+commit;
 
 -- Kontrol: kalan eksikler (sıfır olması beklenir)
 -- select count(*) from record_fotograflar where file_id is null;

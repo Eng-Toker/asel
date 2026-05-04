@@ -2,6 +2,10 @@
 -- Audit: AUDIT_FINAL.md P0-1, P0-2, P0-3, P0-4
 -- Çalıştırma: Supabase Dashboard → SQL Editor → tek seferde çalıştır
 -- Etki: anonim/misafir tüm yazma yetkisi kapanır; authenticated user'a sıkı erişim.
+-- B34: Tüm DDL tek transaction içinde — yarı uygulama imkansız.
+-- Dry-run için: aşağıdaki commit; → rollback; çevir, çalıştır, sonra geri al.
+
+begin;
 
 -- ── P0-1: record_fotograflar (KRİTİK B1) ──────────────────────────────────
 drop policy if exists "okuma"         on record_fotograflar;
@@ -55,6 +59,8 @@ create policy "santiye_fotolar_insert" on storage.objects
 create policy "santiye_fotolar_delete" on storage.objects
   for delete to authenticated
   using (bucket_id = 'santiye-fotolar');
+
+commit;
 
 -- ── Doğrulama sorguları ───────────────────────────────────────────────────
 -- 1) Anon role'e açık politika kalmadı mı (sıfır satır olmalı)

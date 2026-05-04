@@ -13,6 +13,10 @@
 --
 -- ÇALIŞTIRMA: Supabase Dashboard → SQL Editor → tek seferde.
 -- IDEMPOTENT: Evet (DO bloku mevcut policy adlarını dinamik bulur).
+-- B34: Tüm DDL tek transaction içinde — yarı uygulama imkansız.
+-- Dry-run için: aşağıdaki commit; → rollback; çevir, çalıştır, sonra geri al.
+
+begin;
 
 -- ── 1) Tüm mevcut policy'leri dynamic drop ─────────────────────────────
 do $$
@@ -59,6 +63,10 @@ create policy "l_select" on santiye_log for select to authenticated using (true)
 create policy "l_insert" on santiye_log for insert to authenticated with check (true);
 create policy "l_update" on santiye_log for update to authenticated using (true);
 create policy "l_delete" on santiye_log for delete to authenticated using (true);
+-- NOT: l_update + l_delete B32 ile drop ediliyor (immutable). Bu migration'dan
+--      sonra B32 migration'ı çalıştır.
+
+commit;
 
 -- ── 3) Doğrulama sorguları ─────────────────────────────────────────────
 -- Aşağıdakileri ayrı çalıştır, her biri ZERO satır dönmeli.

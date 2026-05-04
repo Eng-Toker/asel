@@ -20,6 +20,10 @@
 --
 -- ÇALIŞTIRMA: Supabase Dashboard → SQL Editor.
 -- IDEMPOTENT: Evet (drop if exists).
+-- B34: Tüm DDL tek transaction içinde — yarı uygulama imkansız.
+-- Dry-run için: aşağıdaki commit; → rollback; çevir, çalıştır, sonra geri al.
+
+begin;
 
 -- ── Bilinen anon SELECT policy adını drop et ───────────────────────────
 drop policy if exists "misafir_foto_okuma"   on storage.objects;
@@ -43,6 +47,8 @@ begin
     execute format('drop policy if exists %I on storage.objects', r.policyname);
   end loop;
 end $$;
+
+commit;
 
 -- ── Doğrulama sorguları ────────────────────────────────────────────────
 -- 1) storage.objects'te anon/public policy kalmadı mı (zero satır olmalı)
