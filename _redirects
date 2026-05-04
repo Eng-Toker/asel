@@ -1,0 +1,39 @@
+# Cloudflare Pages _redirects — hassas dosyaları 404'e yönlendir
+# Bu dosya CFIX-1 (B38 mitigation) — .cfignore Pages tarafından
+# native desteklenmeyebileceği için defansif. Audit dökümanları,
+# migrations, scripts, Worker dosyaları, internal docs public erişime
+# kapatılır (HTTP 404).
+#
+# Format: <pattern>  <destination>  <status>
+# Pattern matching: glob (* tek segment, ** çok segment)
+
+# Audit ve internal docs
+/AUDIT_FINAL.md          /404  404
+/AUDIT_GRUP1-5_OZET.md   /404  404
+/AUDIT_REVIEW.md         /404  404
+/MANUAL_TASKS.md         /404  404
+/SESSION_CHECKPOINT.md   /404  404
+/HANDOFF.md              /404  404
+/CHANGES_SUMMARY.md      /404  404
+/MODULES.md              /404  404
+/CLAUDE.md               /404  404
+/RAPOR_SPEC.md           /404  404
+/MIMARI.md               /404  404
+/docs/*                  /404  404
+
+# SQL migrations — Supabase Dashboard'dan çalıştırılır, public görünmesin
+/migrations/*            /404  404
+
+# Worker dosyaları — ayrı deploy, frontend bundle'ında değil
+/cloudflare-worker.js    /404  404
+/wrangler.toml           /404  404
+
+# Üretim script'leri
+/scripts/*               /404  404
+
+# Git/editor metadata
+/.git/*                  /404  404
+/.gitignore              /404  404
+/.gitattributes          /404  404
+/.cfignore               /404  404
+/.claude/*               /404  404
