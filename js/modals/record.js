@@ -380,6 +380,7 @@ window.modalKapat = () => {
 };
 
 window.kayitKaydet = async () => {
+  if (isMisafir()) { toast("Misafir kayıt ekleyemez", "warn"); return; }
   const alanInput = el("f-alan");
   if (alanInput) app.form.uygulamaAlani = alanInput.value.trim();
   if (!app.form.uygulamaAlani) {
