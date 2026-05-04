@@ -3,8 +3,38 @@
 import { app } from "../state.js";
 import { el, esc, badgeCls, parseNum, tarihKisa } from "../utils.js";
 import { registerRender } from "../router.js";
+import { maskPIIBatch, maskCached } from "../mask.js";
 
-export function renderDashboard() {
+// Legacy duzenleyen değerleri ham email/local-part içerebilir (P1-10
+// öncesi yazımlar). Email gibi görünen veya yeni olmayan local-part
+// formatlı değerleri tespit edip Worker'dan deterministic hash al.
+// pii: ile başlayan değerler zaten maskeli, mapped isimler (Abdulrahman,
+// Deniz) raw kalır.
+const _MAPPED = new Set(["abdulrahman", "deniz"]);
+function _piiAdayMi(s) {
+  if (!s || typeof s !== "string") return false;
+  if (s.startsWith("pii:")) return false;
+  if (s === "—" || s === "Admin") return false;
+  if (_MAPPED.has(s.toLowerCase())) return false;
+  if (s.includes("@")) return true;          // ham email
+  return false;                              // local-part fallback'i bilemeyiz; e-postadan emin olmadan dokunma
+}
+
+async function _piiPrefetch(values) {
+  const adaylar = [...new Set(values.filter(_piiAdayMi))];
+  if (adaylar.length) await maskPIIBatch(adaylar);
+}
+
+// Render-time getter: aday değer için cache hit ise hash, yoksa "Admin"
+// hard-mask (Worker erişilmediyse ham email asla göstermez).
+function _piiGoster(value) {
+  const cached = maskCached(value);
+  if (cached !== value) return cached;             // cache hit (pii:hash)
+  if (_piiAdayMi(value)) return "Admin";           // aday + miss → hard-mask
+  return value;                                    // mapped/sentinel (Abdulrahman, —)
+}
+
+export async function renderDashboard() {
   const container = el("dashboard-content");
   if (!container) return;
   const dbBolge = el("dashboard-bolge");
@@ -22,6 +52,10 @@ export function renderDashboard() {
   const toplamMetraj = tumAsamalar.reduce((s, a) => s + (parseNum(a.metraj) || 0), 0);
   const aktifSantiye = santiyeler.filter((sa) => tumKayitlar.some((r) => r.santiye === sa)).length;
   const sonLog       = app.logSatirlar.slice(0, 5);
+
+  // PII preflight: ham email-like duzenleyen değerleri için Worker'dan
+  // deterministic hash al. UI freeze yok — fetch async, hata-toleranslı.
+  await _piiPrefetch(sonLog.map((s) => s.duzenleyen));
 
   let html = `
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:18px">
@@ -45,7 +79,7 @@ export function renderDashboard() {
       html += `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:8px;font-size:12px">
         <div style="flex:1;min-width:0">
           <div style="font-weight:600">${esc(s.santiye)} · ${esc(s.alan)}</div>
-          <div style="color:var(--muted);margin-top:2px">${esc(s.duzenleyen)} · Aşama ${s.asama}${s.malzeme ? " · " + esc(s.malzeme) : ""}</div>
+          <div style="color:var(--muted);margin-top:2px">${esc(_piiGoster(s.duzenleyen))} · Aşama ${s.asama}${s.malzeme ? " · " + esc(s.malzeme) : ""}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <span class="badge ${badgeCls(s.durum)}">${esc(s.durum)}</span>

@@ -8,6 +8,14 @@ import { oturumYukle } from "./auth.js";
 
 const _cache = new Map();
 
+// Cache hit varsa maskeli değeri sync döndürür, yoksa input'un kendisi.
+// Async fetch tetiklemez — render path'inde kullanmak için. Önce
+// maskPIIBatch ile prefetch yap, sonra render içinde maskCached ile oku.
+export function maskCached(value) {
+  if (value == null || value === "") return value;
+  return _cache.get(String(value)) ?? value;
+}
+
 // Tek değer maskele. Cache miss'te Worker'a fetch, cache hit'te anında döner.
 // Hata durumunda input'u kendisi döndürür (defansif — UX kırılmasın).
 export async function maskPII(value) {
