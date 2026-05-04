@@ -132,7 +132,10 @@ async function verifyMisafirParola(password, encoded) {
   const parts = encoded.split("$");
   if (parts.length !== 4 || parts[0] !== "pbkdf2-sha256") return false;
   const iter = parseInt(parts[1], 10);
-  if (!Number.isFinite(iter) || iter < 1) return false;
+  // B17: iter alt+üst sınır. Üst sınır 1.5M = OWASP 2025 önerilen max
+  // (600k × 2.5 emniyet payı). Üst sınırsız bırakırsak yanlış set edilen
+  // GUEST_PASSWORD_HASH (örn. 999M iter) Worker CPU bomb'u olur.
+  if (!Number.isFinite(iter) || iter < 1 || iter > 1_500_000) return false;
   let salt, expected;
   try {
     salt     = _b64decode(parts[2]);
