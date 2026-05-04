@@ -3,6 +3,7 @@
 import { app } from "./state.js";
 import { el, esc, toast } from "./utils.js";
 import { isMisafir } from "./auth.js";
+import { piiPrefetch, piiGoster } from "./pii-helpers.js";
 
 function filtreliSatirlar() {
   const sF = el("log-filter-santiye")?.value || "";
@@ -38,6 +39,8 @@ window.logExcelIndir = async () => {
   if (!window.XLSX) return;
   const satirlar = filtreliSatirlar();
   if (!satirlar.length) { toast("Dışa aktarılacak kayıt yok", "warn"); return; }
+  // B10: PII mask Excel export'unda da uygulanır.
+  await piiPrefetch(satirlar.map((s) => s.duzenleyen));
   const basliklar = ["Tarih", "Saat", "Düzenleyen", "Şantiye", "Uygulama Alanı", "Aşama", "Malzeme", "Durum", "Metraj (m²)", "Personel"];
   const veri = [
     basliklar,
@@ -46,7 +49,7 @@ window.logExcelIndir = async () => {
       return [
         d ? d.toLocaleDateString("tr-TR") : "",
         d ? d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "",
-        safeCell(s.duzenleyen || "—"),
+        safeCell(piiGoster(s.duzenleyen) || "—"),
         safeCell(s.santiye || ""),
         safeCell(s.alan || ""),
         "Aşama " + s.asama,
@@ -65,10 +68,12 @@ window.logExcelIndir = async () => {
   toast("Excel indirildi", "ok");
 };
 
-window.logPdfIndir = () => {
+window.logPdfIndir = async () => {
   if (isMisafir()) { toast("Misafir export edemez", "warn"); return; }
   const satirlar = filtreliSatirlar();
   if (!satirlar.length) { toast("Dışa aktarılacak kayıt yok", "warn"); return; }
+  // B10: PII mask PDF export'unda da uygulanır.
+  await piiPrefetch(satirlar.map((s) => s.duzenleyen));
   const w = window.open("", "_blank");
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Şantiye Log</title>
@@ -96,7 +101,7 @@ ${satirlar.map((s) => {
     return `<tr>
     <td>${d ? esc(d.toLocaleDateString("tr-TR")) : "—"}</td>
     <td>${d ? esc(d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })) : "—"}</td>
-    <td><b>${esc(s.duzenleyen || "—")}</b></td>
+    <td><b>${esc(piiGoster(s.duzenleyen) || "—")}</b></td>
     <td>${esc(s.santiye || "")}</td><td>${esc(s.alan || "")}</td><td>Aşama ${esc(s.asama)}</td>
     <td>${esc(s.malzeme || "—")}</td>
     <td><span class="badge ${durumCls}">${esc(s.durum || "")}</span></td>

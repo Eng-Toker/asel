@@ -3,6 +3,7 @@
 import { app } from "../state.js";
 import { el, esc, badgeCls } from "../utils.js";
 import { registerRender } from "../router.js";
+import { piiPrefetch, piiGoster } from "../pii-helpers.js";
 
 export function renderLog() {
   const logSantiyeEl = el("log-filter-santiye");
@@ -25,7 +26,7 @@ window.logPerKapat = (id) => {
   el(id + "-rest").style.display = "none";
 };
 
-window.logFiltrele = () => {
+window.logFiltrele = async () => {
   const sFiltre = el("log-filter-santiye")?.value || "";
   const dFiltre = el("log-filter-durum")?.value || "";
   const aFiltre = (el("log-filter-ara")?.value || "").toLowerCase();
@@ -35,6 +36,10 @@ window.logFiltrele = () => {
     if (aFiltre && !s.alan?.toLowerCase().includes(aFiltre) && !s.malzeme?.toLowerCase().includes(aFiltre)) return false;
     return true;
   });
+
+  // B10: dashboard ile tutarlı PII mask. Ham email değerler için Worker'dan
+  // deterministic hash al; cache miss + aday değer "Admin" hard-mask.
+  await piiPrefetch(satirlar.map((s) => s.duzenleyen));
 
   // Desktop tablo
   el("log-tbody").innerHTML = satirlar.length
@@ -52,7 +57,7 @@ window.logFiltrele = () => {
           : "—";
         return `<tr>
           <td>${tarih}</td><td>${saat}</td>
-          <td><span style="font-weight:600">${esc(s.duzenleyen || "—")}</span></td>
+          <td><span style="font-weight:600">${esc(piiGoster(s.duzenleyen) || "—")}</span></td>
           <td>${esc(s.santiye)}</td><td>${esc(s.alan)}</td>
           <td>Aşama ${s.asama}</td><td>${esc(s.malzeme || "—")}</td>
           <td><span class="badge ${badgeCls(s.durum)}">${esc(s.durum)}</span></td>
@@ -72,7 +77,7 @@ window.logFiltrele = () => {
         return `<div class="log-card">
           <div class="log-card-head">
             <div>
-              <div class="log-card-tarih">${tarih} · ${esc(s.duzenleyen || "—")}</div>
+              <div class="log-card-tarih">${tarih} · ${esc(piiGoster(s.duzenleyen) || "—")}</div>
               <div class="log-card-title">${esc(s.alan)}</div>
               <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(s.santiye)} · Aşama ${s.asama}</div>
             </div>
