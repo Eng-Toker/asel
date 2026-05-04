@@ -2,19 +2,22 @@
 # smoke.sh — ASEL Şantiye Takip production smoke test
 #
 # Kullanım:
-#   bash scripts/smoke.sh <FRONTEND_URL> <WORKER_URL> [JWT]
+#   bash scripts/smoke.sh <FRONTEND_URL> <WORKER_URL> <SUPABASE_URL> <SUPABASE_ANON_KEY> [JWT]
 #
 # Örnek:
 #   bash scripts/smoke.sh \
 #     https://santiye-takipp.pages.dev \
 #     https://drive-upload.eng-adtoker.workers.dev \
-#     "eyJhbGciOi..."
+#     https://ecassmluvjskywibbkuv.supabase.co \
+#     "eyJhbGciOiJI...anon-key..." \
+#     "eyJhbGciOi...user-jwt..."
 #
 # JWT opsiyonel — verilmezse authenticated test'ler atlanır.
 # JWT için: tarayıcıda admin login → DevTools → Application → Local Storage
 # → Supabase oturum nesnesinden access_token kopyala.
+# WS test (10) için node binary gerek; yoksa skip.
 #
-# 7 kritik path test edilir; her test PASS/FAIL renkli yazılır. Exit code:
+# 10 kritik path test edilir; her test PASS/FAIL renkli yazılır. Exit code:
 #   0 → tüm test'ler PASS
 #   1 → en az bir test FAIL
 
@@ -22,10 +25,12 @@ set -u
 
 FRONTEND="${1:-}"
 WORKER="${2:-}"
-JWT="${3:-}"
+SUPABASE_URL="${3:-}"
+SUPABASE_KEY="${4:-}"
+JWT="${5:-}"
 
-if [ -z "$FRONTEND" ] || [ -z "$WORKER" ]; then
-  echo "Kullanım: bash scripts/smoke.sh <FRONTEND_URL> <WORKER_URL> [JWT]"
+if [ -z "$FRONTEND" ] || [ -z "$WORKER" ] || [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+  echo "Kullanım: bash scripts/smoke.sh <FRONTEND_URL> <WORKER_URL> <SUPABASE_URL> <SUPABASE_ANON_KEY> [JWT]"
   exit 2
 fi
 
@@ -142,6 +147,96 @@ if [ -n "$JWT" ]; then
   fi
 else
   printf "${Y}△ SKIP${N} JWT verilmedi\n"
+fi
+
+# 8) RLS sanity — anon JWT ile santiye_raporlar SELECT (P1-6)
+# Beklenen: 200 + boş array (rap_select policy `to authenticated` only;
+# anon role auth.jwt() ->> 'email' eşleşmez → using filter false → 0 satır).
+# 401/403 da kabul edilebilir (RLS implementasyon detayı).
+_section "8) RLS sanity — anon SELECT santiye_raporlar"
+resp=$(curl -s -w "\n%{http_code}" \
+  "$SUPABASE_URL/rest/v1/santiye_raporlar?select=id&limit=1" \
+  -H "apikey: $SUPABASE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_KEY" \
+  --max-time 15)
+body=$(echo "$resp" | sed '$d')
+code=$(echo "$resp" | tail -n1)
+if [ "$code" = "200" ] && [ "$body" = "[]" ]; then
+  printf "${G}✓ PASS${N} RLS — anon SELECT 200 + boş array\n"
+  PASS=$((PASS+1))
+elif [ "$code" = "401" ] || [ "$code" = "403" ]; then
+  printf "${G}✓ PASS${N} RLS — anon SELECT %s (deny)\n" "$code"
+  PASS=$((PASS+1))
+else
+  printf "${R}✗ FAIL${N} RLS — anon SELECT %s body: %s\n" "$code" "$body"
+  FAIL=$((FAIL+1))
+fi
+
+# 9) CORS keskin reject — actual POST + malicious Origin
+# Browser preflight'tan sonra actual istek; izinsiz Origin için
+# Allow-Origin yok → browser bloklar (sunucu yine de cevaplayabilir).
+_section "9) CORS — actual POST + malicious Origin"
+hdrs=$(curl -s -I -X POST "$WORKER/upload" \
+  -H "Origin: https://attacker.example.com" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  --max-time 15 | tr -d '\r' || true)
+if echo "$hdrs" | grep -qi "^access-control-allow-origin: https://attacker"; then
+  printf "${R}✗ FAIL${N} CORS — actual POST'ta attacker Origin yansıdı\n"
+  FAIL=$((FAIL+1))
+else
+  printf "${G}✓ PASS${N} CORS — actual POST'ta Allow-Origin yansımadı\n"
+  PASS=$((PASS+1))
+fi
+
+# 10) WebSocket connect + 30s heartbeat (Supabase Realtime)
+# node binary gerekir; yoksa skip. Phoenix protocol heartbeat: 30s
+# içinde ws.onopen + ws.send('phoenix heartbeat') OK ise PASS.
+_section "10) WS connect + 30s heartbeat"
+if command -v node >/dev/null 2>&1; then
+  WS_URL="${SUPABASE_URL/https:\/\//wss://}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0"
+  NODE_RESULT=$(WS_URL="$WS_URL" node -e '
+    const WebSocket = require("ws");
+    const ws = new WebSocket(process.env.WS_URL);
+    let opened = false, hbAcked = false;
+    const t = setTimeout(() => {
+      console.log(JSON.stringify({opened, hbAcked, reason: "timeout"}));
+      try { ws.terminate(); } catch {}
+      process.exit(0);
+    }, 35000);
+    ws.on("open", () => {
+      opened = true;
+      ws.send(JSON.stringify({topic:"phoenix", event:"heartbeat", payload:{}, ref:"smoke-1"}));
+    });
+    ws.on("message", (data) => {
+      try {
+        const m = JSON.parse(data.toString());
+        if (m.ref === "smoke-1" && m.event === "phx_reply") {
+          hbAcked = true;
+          clearTimeout(t);
+          console.log(JSON.stringify({opened, hbAcked, reason: "ack"}));
+          try { ws.close(); } catch {}
+          process.exit(0);
+        }
+      } catch {}
+    });
+    ws.on("error", (e) => {
+      console.log(JSON.stringify({opened, hbAcked, reason: "error: " + e.message}));
+      clearTimeout(t);
+      process.exit(0);
+    });
+  ' 2>&1)
+  if echo "$NODE_RESULT" | grep -q '"hbAcked":true'; then
+    printf "${G}✓ PASS${N} WS — open + heartbeat ack\n"
+    PASS=$((PASS+1))
+  elif echo "$NODE_RESULT" | grep -q "Cannot find module 'ws'"; then
+    printf "${Y}△ SKIP${N} WS — npm 'ws' paketi yok (npm install ws gerek)\n"
+  else
+    printf "${R}✗ FAIL${N} WS — %s\n" "$NODE_RESULT"
+    FAIL=$((FAIL+1))
+  fi
+else
+  printf "${Y}△ SKIP${N} WS — node binary yok\n"
 fi
 
 # Özet
