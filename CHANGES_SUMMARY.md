@@ -33,6 +33,3 @@ _(başlamadı)_
   Karar: D (2026-05-04). Yeniden değerlendirme: Faz 2 sonu. Detaylı seçenekler
   ve B3 HMAC short-lived token implementation pattern'i MANUAL_TASKS.md
   USER_DECISION bloğunda referansta.
-
-## Ertelenen / Reddedilen
-_(yok)_
