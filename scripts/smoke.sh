@@ -123,12 +123,24 @@ else
   printf "${Y}△ SKIP${N} JWT verilmedi\n"
 fi
 
-# 6) Worker /misafirLogin — yanlış parola → 401
-_section "6) Worker /misafirLogin — yanlış parola"
+# 6) Worker /misafirLogin — yanlış parola → 401 + PBKDF2 yanıt süresi >100ms (B47)
+# Yanıt süresi <100ms = PBKDF2 hesabı atlandı (constant-time bypass riski).
+# 600k iter SHA-256 ~200-500ms. Üst sınır kontrolü gerekmez (yanıt zaten timeout ile kesilir).
+_section "6) Worker /misafirLogin — yanlış parola + PBKDF2 timing"
+ms_start=$(date +%s%N)
 code=$(curl "${CURL_OPTS[@]}" -X POST "$WORKER/misafirLogin" \
   -H "Content-Type: application/json" \
   -d '{"password":"YANLIS_PAROLA_TEST"}')
+ms_end=$(date +%s%N)
+elapsed_ms=$(( (ms_end - ms_start) / 1000000 ))
 _test "POST $WORKER/misafirLogin (wrong)" "401" "$code"
+if [ "$elapsed_ms" -ge 100 ]; then
+  printf "${G}✓ PASS${N} /misafirLogin PBKDF2 timing %dms (>=100ms — hesap çalıştı)\n" "$elapsed_ms"
+  PASS=$((PASS+1))
+else
+  printf "${R}✗ FAIL${N} /misafirLogin yanıt %dms (<100ms — PBKDF2 atlandı, constant-time bypass!)\n" "$elapsed_ms"
+  FAIL=$((FAIL+1))
+fi
 
 # 7) Worker /maskPII — auth + tek değer
 _section "7) Worker /maskPII — auth + 1 value"
