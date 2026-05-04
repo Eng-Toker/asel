@@ -10,19 +10,10 @@
 - **Önkoşul:** yok — M0'dan önce yapılır
 - **Bloke ettiği:** repo hijyeni (default branch klasik adlandırma).
   Deploy turunun parçası, P3'e ötelenmez.
-- **Karar:** B6 deploy bloker (2026-05-04 user feedback). Push işlemi
-  Cloudflare Pages auto-deploy trigger'ını TEHLİKEYE atabilir; bu
-  yüzden CC otomatik push yapmıyor — kullanıcı kontrollü adımlar.
-- **Önkoşul kontrolü (push'tan önce!):**
-  Cloudflare Pages → santiye-takipp projesi → Settings → Build &
-  deployments → Production branch ayarı:
-  - Eğer `main` ise: main branch push'u OTOMATİK PROD DEPLOY tetikler.
-    Bu durumda M1-M9 deploy turunun ARDINDAN main rename yapılmalı,
-    aksi halde working tree çok değişiklikle tek seferde prod'a gider.
-  - Eğer `claude/refactor-code-cleanup-9HnhE` ise: rename'den önce
-    Cloudflare ayarını da güncellemek gerek (yeni branch'i Production
-    olarak işaretle). Sıra: rename → Cloudflare branch ayarı.
-- **Aksiyon (önerilen sıra):**
+- **Karar:** B6 deploy bloker (2026-05-04 user feedback). Cloudflare
+  Pages bu projede **Direct Upload** modunda; git push auto-deploy
+  TETİKLEMİYOR (handoff bilgisi). Push güvenli.
+- **Aksiyon:**
   1. **Lokal:** Mevcut branch'in HEAD'inden `main` oluştur:
      ```bash
      git fetch origin
@@ -31,9 +22,7 @@
      ```
   2. **GitHub UI:** Settings → Branches → Default branch → Switch to
      `main` → Update. (Confirm dialog'u kabul et.)
-  3. **Cloudflare Pages UI** (gerekirse): Production branch'i `main`'e
-     güncelle. Save.
-  4. **Lokal cleanup:**
+  3. **Lokal cleanup:**
      ```bash
      git checkout main
      git branch -d claude/refactor-code-cleanup-9HnhE
@@ -67,36 +56,60 @@
   döndürür → birden fazla kullanıcı aynı görünür (UX problemi, **security
   değil**).
 - **Aksiyon:**
-  1. Supabase Dashboard → SQL Editor:
+  1. Supabase Dashboard → SQL Editor — **3 tabloda PII alanları**
+     (kullanıcı tarafı yazılan tüm yerler):
   ```sql
-  -- 1) Mevcut benzersiz duzenleyen değerleri (sayım + ilk 50)
-  select duzenleyen, count(*) c
+  -- 1) santiye_log.duzenleyen — log satırlarında kim ne yapmış
+  select 'santiye_log.duzenleyen' as src, duzenleyen as deger, count(*) c
   from santiye_log
   where duzenleyen is not null and duzenleyen <> '—'
   group by duzenleyen
-  order by c desc
-  limit 50;
+  union all
+  -- 2) santiye_records.duzenleyen — kayıt sahibi
+  select 'santiye_records.duzenleyen', duzenleyen, count(*)
+  from santiye_records
+  where duzenleyen is not null and duzenleyen <> '—'
+  group by duzenleyen
+  union all
+  -- 3) santiye_raporlar.hazirlayan_email — RLS dependency, ham kalır,
+  --    ama dashboard/log'a düşerse PII riski; envanter için gör.
+  select 'santiye_raporlar.hazirlayan_email', hazirlayan_email, count(*)
+  from santiye_raporlar
+  where hazirlayan_email is not null
+  group by hazirlayan_email
+  order by 1, 3 desc
+  limit 100;
   ```
-  2. Çıktıyı incele:
+  2. Çıktıyı incele (her satır → kaynağıyla beraber):
      - `Abdulrahman`, `Deniz`, `Misafir` → mapped/sentinel, **OK**.
      - `pii:<12 hex>` → P1-10 sonrası yazımlar, **OK**.
-     - Diğer (örn. `user`, `ali`, `eng.adtoker@gmail.com`) → **legacy aday**.
-  3. Legacy aday sayısı:
+     - Email ham (`xxx@yyy.zzz`) veya local-part (`user`, `ali`) → **legacy aday**.
+     - santiye_raporlar.hazirlayan_email **bilerek ham** (P1-6 RLS
+       `using (hazirlayan_email = auth.jwt() ->> 'email')` dependency).
+       Sadece envanter için bakılır; dashboard/log doğrudan göstermez.
+  3. Legacy aday sayısı (santiye_log + santiye_records duzenleyen alanları):
      - **0** → Aksiyon yok, deploy'a devam.
      - **1-3** → Manuel UPDATE ile dashboard'da gösterilecek görünür ad
        belirle (örn. `update santiye_log set duzenleyen = 'Ali Toker'
-       where duzenleyen = 'eng.adtoker';`). KULLANICI_ADLARI map'ine
-       de aynı kullanıcıyı ekle (auth.js, ayrı commit gerekir).
+       where duzenleyen = 'eng.adtoker'; update santiye_records ...;`).
+       KULLANICI_ADLARI map'ine de aynı kullanıcıyı ekle (auth.js,
+       ayrı commit gerekir).
      - **>3** → Backfill migration gerekir (Worker /maskPII'a batch
        çağrısı + UPDATE — kapsam genişler, ayrı sprint adayı).
 - **Doğrulama (post-deploy):**
   ```sql
-  -- Dashboard'da "Admin" görünen sayım
-  select count(distinct duzenleyen) c
-  from santiye_log
-  where duzenleyen is not null and duzenleyen <> '—'
-    and duzenleyen not in ('Abdulrahman','Deniz','Misafir')
-    and duzenleyen not like 'pii:%';
+  -- Dashboard'da "Admin" görünen sayım (3 tablo birleşik)
+  with src as (
+    select duzenleyen as v from santiye_log
+      where duzenleyen is not null and duzenleyen <> '—'
+    union all
+    select duzenleyen from santiye_records
+      where duzenleyen is not null and duzenleyen <> '—'
+  )
+  select count(distinct v) c
+  from src
+  where v not in ('Abdulrahman','Deniz','Misafir')
+    and v not like 'pii:%';
   -- 0 = ideal; >1 = dashboard "Admin" çoklu görünür
   ```
 - **Status:** [ ]
@@ -151,11 +164,12 @@ order by tablename;
   okur. Future multi-admin görünürlüğü için P2 `user_bolgeleri` (AUDIT §11.2).
 - **Aksiyon:**
   1. Supabase Dashboard → SQL Editor aç
-  2. **DRY-RUN ÖNCE:** Tüm SQL'i `BEGIN; <SQL>; ROLLBACK;` ile sar ve çalıştır.
-     Hata yok ise commit'sız geri dönüş — production state değişmez ama
-     conflict / sözdizimi hatası şimdi tespit edilir.
-  3. Dry-run temiz ise: `migrations/2026-05-04_p1_santiye_raporlar_rls.sql`
-     içeriğini tek seferde çalıştır (BEGIN/ROLLBACK olmadan)
+  2. **DRY-RUN ÖNCE:** Migration dosyasındaki son `commit;` satırını
+     `rollback;` ile değiştirip çalıştır. Hata yok ise state değişmez —
+     conflict / sözdizimi tespit edilir. Sonra `commit;` geri çevir.
+  3. Asıl çalıştırma: `migrations/2026-05-04_p1_santiye_raporlar_rls.sql`
+     içeriğini tek seferde çalıştır (script kendi BEGIN/COMMIT bloğunda
+     — atomik DDL, herhangi bir adım fail olursa otomatik rollback).
   4. Çıktıda hata olmadığını doğrula
 - **Doğrulama:**
 ```sql

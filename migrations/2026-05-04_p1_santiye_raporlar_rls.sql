@@ -20,6 +20,13 @@
 -- ÇALIŞTIRMA: Supabase Dashboard → SQL Editor.
 -- IDEMPOTENT: Evet (drop if exists + create).
 
+-- ── ATOMİK GEÇİŞ: tüm DDL tek transaction içinde (NIT B1) ──────────────
+-- PostgreSQL DDL transactional → BEGIN/COMMIT bloku içinde herhangi bir
+-- adım fail olursa otomatik rollback (yarı-uygulanmış state imkansız).
+-- Dry-run için: aşağıdaki COMMIT'i ROLLBACK ile değiştir, çalıştır,
+-- sözdizimi/conflict tespit et, sonra geri çevir.
+begin;
+
 -- ── Eski policy'leri drop (bilinen ad varyantları) ─────────────────────
 drop policy if exists "raporlar_read"   on santiye_raporlar;
 drop policy if exists "raporlar_write"  on santiye_raporlar;
@@ -55,6 +62,8 @@ create policy "rap_insert" on santiye_raporlar
   with check (hazirlayan_email = (auth.jwt() ->> 'email'));
 
 -- update / delete bilerek tanımlanmadı → satırlar immutable.
+
+commit;
 
 -- ── Doğrulama sorguları ────────────────────────────────────────────────
 -- 1) Policy listesi (rap_select + rap_insert beklenir, başka yok)

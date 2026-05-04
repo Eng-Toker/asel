@@ -150,9 +150,13 @@ else
 fi
 
 # 8) RLS sanity — anon JWT ile santiye_raporlar SELECT (P1-6)
-# Beklenen: 200 + boş array (rap_select policy `to authenticated` only;
-# anon role auth.jwt() ->> 'email' eşleşmez → using filter false → 0 satır).
-# 401/403 da kabul edilebilir (RLS implementasyon detayı).
+# Beklenen davranışlar (her biri PASS):
+#   - 200 + boş array  → rap_select using filter false (authenticated only)
+#   - 401              → anon JWT reddedildi
+#   - 403              → RLS deny
+# FAIL kriteri:
+#   - 200 + non-empty array → RLS sızıntısı (anon veri görüyor!)
+#   - 5xx                   → backend hatası
 _section "8) RLS sanity — anon SELECT santiye_raporlar"
 resp=$(curl -s -w "\n%{http_code}" \
   "$SUPABASE_URL/rest/v1/santiye_raporlar?select=id&limit=1" \
@@ -161,16 +165,25 @@ resp=$(curl -s -w "\n%{http_code}" \
   --max-time 15)
 body=$(echo "$resp" | sed '$d')
 code=$(echo "$resp" | tail -n1)
-if [ "$code" = "200" ] && [ "$body" = "[]" ]; then
-  printf "${G}✓ PASS${N} RLS — anon SELECT 200 + boş array\n"
-  PASS=$((PASS+1))
-elif [ "$code" = "401" ] || [ "$code" = "403" ]; then
-  printf "${G}✓ PASS${N} RLS — anon SELECT %s (deny)\n" "$code"
-  PASS=$((PASS+1))
-else
-  printf "${R}✗ FAIL${N} RLS — anon SELECT %s body: %s\n" "$code" "$body"
-  FAIL=$((FAIL+1))
-fi
+case "$code" in
+  200)
+    if [ "$body" = "[]" ]; then
+      printf "${G}✓ PASS${N} RLS — anon SELECT 200 + boş array\n"
+      PASS=$((PASS+1))
+    else
+      printf "${R}✗ FAIL${N} RLS SIZINTISI — anon SELECT 200 + non-empty: %s\n" "$body"
+      FAIL=$((FAIL+1))
+    fi
+    ;;
+  401|403)
+    printf "${G}✓ PASS${N} RLS — anon SELECT %s (deny)\n" "$code"
+    PASS=$((PASS+1))
+    ;;
+  *)
+    printf "${R}✗ FAIL${N} RLS — beklenmeyen kod %s body: %s\n" "$code" "$body"
+    FAIL=$((FAIL+1))
+    ;;
+esac
 
 # 9) CORS keskin reject — actual POST + malicious Origin
 # Browser preflight'tan sonra actual istek; izinsiz Origin için
@@ -190,10 +203,16 @@ else
 fi
 
 # 10) WebSocket connect + 30s heartbeat (Supabase Realtime)
-# node binary gerekir; yoksa skip. Phoenix protocol heartbeat: 30s
-# içinde ws.onopen + ws.send('phoenix heartbeat') OK ise PASS.
+# Önkoşullar:
+#   - node binary
+#   - npm 'ws' paketi (resolve precheck ile doğrulanır; yoksa SKIP+öneri)
+# Phoenix protocol heartbeat: 30s içinde ws.onopen + heartbeat ack PASS.
 _section "10) WS connect + 30s heartbeat"
-if command -v node >/dev/null 2>&1; then
+if ! command -v node >/dev/null 2>&1; then
+  printf "${Y}△ SKIP${N} WS — node binary yok\n"
+elif ! node -e "require.resolve('ws')" >/dev/null 2>&1; then
+  printf "${Y}△ SKIP${N} WS — 'ws' paketi resolve edilemedi (npm i -g ws veya yerel npm i ws)\n"
+else
   WS_URL="${SUPABASE_URL/https:\/\//wss://}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0"
   NODE_RESULT=$(WS_URL="$WS_URL" node -e '
     const WebSocket = require("ws");
@@ -229,14 +248,10 @@ if command -v node >/dev/null 2>&1; then
   if echo "$NODE_RESULT" | grep -q '"hbAcked":true'; then
     printf "${G}✓ PASS${N} WS — open + heartbeat ack\n"
     PASS=$((PASS+1))
-  elif echo "$NODE_RESULT" | grep -q "Cannot find module 'ws'"; then
-    printf "${Y}△ SKIP${N} WS — npm 'ws' paketi yok (npm install ws gerek)\n"
   else
     printf "${R}✗ FAIL${N} WS — %s\n" "$NODE_RESULT"
     FAIL=$((FAIL+1))
   fi
-else
-  printf "${Y}△ SKIP${N} WS — node binary yok\n"
 fi
 
 # Özet
