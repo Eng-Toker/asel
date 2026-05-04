@@ -15,15 +15,21 @@ export function realtimeBaslat() {
   const ws     = new WebSocket(wsUrl);
   let heartbeatInterval;
 
-  const TOPICS = [
-    "santiye_records", "record_asamalar", "santiyeler",
-    "record_fotograflar", "santiye_log", "santiye_notlar",
-  ];
+  // bolge sütunu olan tablolar → server-side filter ile sadece kendi
+  // bölgesinin event'leri gelir. Child tablolarda bolge yok, refresh
+  // debounce'ı zaten veriYukle'yi bolge filtreli çağırıyor.
+  const TOPICS_WITH_BOLGE = ["santiye_records", "santiyeler", "santiye_log", "santiye_notlar"];
+  const TOPICS_NO_BOLGE   = ["record_asamalar", "record_fotograflar"];
+  const bolgeSuffix = app.bolge ? `:bolge=eq.${encodeURIComponent(app.bolge)}` : "";
 
   ws.onopen = () => {
     ws.send(JSON.stringify({ topic: "realtime:*", event: "phx_join", payload: { access_token: token }, ref: "1" }));
-    TOPICS.forEach((t, i) =>
-      ws.send(JSON.stringify({ topic: `realtime:public:${t}`, event: "phx_join", payload: {}, ref: String(i + 2) }))
+    let ref = 2;
+    TOPICS_WITH_BOLGE.forEach((t) =>
+      ws.send(JSON.stringify({ topic: `realtime:public:${t}${bolgeSuffix}`, event: "phx_join", payload: {}, ref: String(ref++) }))
+    );
+    TOPICS_NO_BOLGE.forEach((t) =>
+      ws.send(JSON.stringify({ topic: `realtime:public:${t}`, event: "phx_join", payload: {}, ref: String(ref++) }))
     );
     heartbeatInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN)
