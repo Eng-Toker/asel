@@ -6,7 +6,7 @@
 import { app } from "../state.js";
 import { el, esc, toast } from "../utils.js";
 import { isMisafir, oturumYukle } from "../auth.js";
-import { DRIVE_URL } from "../config.js";
+import { DRIVE_URL, H } from "../config.js";
 import { sikistir } from "../photo.js";
 import { dbPost } from "../db.js";
 import { ASEL_LOGO, KOSTER_LOGO } from "./rapor-assets.js";
@@ -71,7 +71,7 @@ function base64ToBlob(b64, mime) {
 async function fotoWorkerProxyIle(fileId, fileUrl) {
   const r = await fetch(`${DRIVE_URL}/fotoIndir`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: H.Authorization },
     body: JSON.stringify({ fileId: fileId || null, fileUrl: fileUrl || null }),
   });
   const d = await r.json().catch(() => null);
@@ -566,7 +566,7 @@ window.raporUret = async () => {
     yukleniyorMesaj("AI değerlendirmesi yapılıyor…", 2, 3);
     const aiCevabi = await fetch(`${DRIVE_URL}/rapor`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: H.Authorization },
       body: JSON.stringify({
         yorum,
         malzeme: asama.malzeme || "",
@@ -657,7 +657,7 @@ window.raporUret = async () => {
 
       const driveSonuc = await fetch(`${DRIVE_URL}/raporPdf`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: H.Authorization },
         body: JSON.stringify({
           pdfBase64,
           santiye: kayit.santiye,

@@ -61,112 +61,16 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // ── /foyTest ─ Geçici test endpoint (GET veya POST). Onay sonrası silinecek. ──
-    if (path === '/foyTest') {
-      try {
-        const tA = Date.now();
-        const token = await getAccessToken(env);
-        const tB = Date.now();
-
-        // Test girdileri — ilk test cold start (kategori map build), sonrakiler cache hit görmeli.
-        const testCases = [
-          { input: 'KÖSTER KBE Flüssigfolie',     expect: 'drive-tf' },
-          { input: 'KÖSTER NB 2000',              expect: 'drive-tf' },
-          { input: 'KÖSTER BDM / BDM Powder',     expect: 'drive-tf' },
-          { input: 'KÖSTER KB-Pur IN',            expect: 'drive-tf' },
-          { input: 'KÖSTER Polysil TG 500',       expect: 'drive-tf' },
-          { input: 'KÖSTER TPO Aqua U15',         expect: 'tf-yok'   },
-          { input: 'Fondolin',                    expect: 'none'     },
-          { input: 'KÖSTER Asla Var Olmayan X',   expect: 'none'     },
-        ];
-        // SEQUENTIAL — cold/warm farkını ölçmek için (paralel olsa hepsi aynı anda cold görür)
-        const tests = [];
-        for (const tc of testCases) {
-          const ti = Date.now();
-          const actual = await kosterFoyMalzemeBul(token, tc.input);
-          const tj = Date.now();
-          tests.push({
-            input:           tc.input,
-            normalized:      normalizeKlasorAdi(tc.input),
-            expected:        tc.expect,
-            actual:          actual.kaynak,
-            klasorAdi:       actual.klasorAdi || null,
-            tfDosyasi:       actual.file?.fileName || null,
-            sebep:           actual.sebep || null,
-            katmap_cached:   actual.katmap_cached ?? null,
-            katmap_buildMs:  actual.katmap_buildMs ?? null,
-            ms:              tj - ti,
-            pass:            actual.kaynak === tc.expect,
-          });
-        }
-        const tC = Date.now();
-
-        // Kategori dağılımı: kategori map'ten hesapla (testlerden sonra zaten cache'te)
-        const { kategoriler, cached: katCached, buildMs: katBuildMs } = await kosterFoyKategoriMap(token);
-        const kategoriDagilimi = {};
-        for (const kat of Object.values(kategoriler)) {
-          kategoriDagilimi[kat.kategoriAdi] = Object.keys(kat.urunler).length;
-        }
-        const toplamUrunIndex = Object.values(kategoriler)
-          .reduce((acc, kat) => acc + Object.keys(kat.urunler).length, 0);
-
-        // KÖSTER web fallback testleri (paralel) — lazy lookup'tan bağımsız
-        const webGirdileri = [
-          'KÖSTER TPO Aqua U15',          // Drive'da TF yok, web'de bulunmalı
-          'KÖSTER KBE Flüssigfolie',      // web kontrol
-          'KÖSTER NB 2000',               // web kontrol
-          'KÖSTER Asla Var Olmayan X',    // web-yok bekleniyor
-        ];
-        const tD = Date.now();
-        const kosterWebTest = await Promise.all(webGirdileri.map(async input => {
-          const ti = Date.now();
-          const r = await kosterWebAra(input);
-          const tj = Date.now();
-          return {
-            input,
-            query:            r.query || null,
-            kaynak:           r.kaynak,
-            url:              r.url || null,
-            baslik:           r.baslik || null,
-            icerik_uzunluk:   r.icerik?.length || 0,
-            icerik_baslangic: r.icerik ? r.icerik.slice(0, 200) : null,
-            sebep:            r.sebep || null,
-            adim:             r.adim || null,
-            error:            r.error || null,
-            ms:               tj - ti,
-          };
-        }));
-        const tE = Date.now();
-
-        return new Response(JSON.stringify({
-          timings: {
-            token_ms:         tB - tA,
-            tests_total_ms:   tC - tB,
-            katmap_cached:    katCached,
-            katmap_build_ms:  katCached ? null : katBuildMs,
-            web_test_ms:      tE - tD,
-          },
-          ozet: {
-            toplam_urun_kategori_index: toplamUrunIndex,
-            kategori_dagilimi:          kategoriDagilimi,
-            // tf_yok_listesi & tum_anahtarlar: lazy modda mevcut değil
-            // (her leaf'i scan etmeden bilinemez)
-          },
-          tests,
-          kosterWebTest,
-        }, null, 2), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      } catch (err) {
-        return new Response(JSON.stringify({ error: err.message, stack: err.stack }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    }
+    // /foyTest endpoint kaldırıldı (P0-6 audit — debug stack trace + OAuth response sızdırıyordu)
 
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
+    }
+
+    // P0-5: tüm endpoint'ler authenticated Supabase user'ı gerektirir
+    const user = await requireAuth(request, env);
+    if (!user) {
+      return new Response('Unauthorized', { status: 401, headers: corsHeaders });
     }
 
     // ── /rapor ─ AI ile teknik rapor 6 alanı üret (Gemini 2.5 Flash) ──────────
@@ -192,6 +96,18 @@ export default {
         const { fileId: gelenId, fileUrl } = await request.json();
         const id = gelenId || driveUrlIdCikar(fileUrl);
         if (!id) throw new Error('fileId/fileUrl her ikisi de boş veya çözülemedi');
+
+        // P0-7: ownership check — kullanıcı sadece record_fotograflar.file_id setindeki dosyaları indirebilir.
+        // RLS authenticated için açık; user token ile yapılan SELECT bölge/sahiplik kısıtlarına otomatik uyar.
+        const userToken = request.headers.get('Authorization').slice(7);
+        const ownR = await fetch(
+          `${env.SUPABASE_URL}/rest/v1/record_fotograflar?file_id=eq.${encodeURIComponent(id)}&select=id&limit=1`,
+          { headers: { 'apikey': env.SUPABASE_ANON_KEY, 'Authorization': `Bearer ${userToken}` } }
+        );
+        const ownRows = await ownR.json().catch(() => null);
+        if (!Array.isArray(ownRows) || ownRows.length === 0) {
+          return new Response('Forbidden', { status: 403, headers: corsHeaders });
+        }
 
         const token = await getAccessToken(env);
 
@@ -910,4 +826,46 @@ async function pdfRaporYukle(env, { pdfBase64, santiye, alan, asama, dosyaAdi })
     fileId,
     fileName: finalAd,
   };
+}
+
+// ─── P0-5 Auth: Supabase JWT verify (HS256) ──────────────────────────────────
+// env.SUPABASE_JWT_SECRET zorunlu (Cloudflare Worker secrets manager'da set edilmeli).
+// env.SUPABASE_URL ve env.SUPABASE_ANON_KEY /fotoIndir ownership check için (P0-7).
+
+function b64urlDecode(s) {
+  const norm = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
+  return Uint8Array.from(atob(norm), c => c.charCodeAt(0));
+}
+
+async function verifyJwt(token, secret) {
+  if (typeof token !== 'string' || !secret) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [h, p, s] = parts;
+  try {
+    const data = new TextEncoder().encode(`${h}.${p}`);
+    const sig  = b64urlDecode(s);
+    const key  = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+    const ok = await crypto.subtle.verify('HMAC', key, sig, data);
+    if (!ok) return null;
+    const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(p)));
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function requireAuth(request, env) {
+  const auth = request.headers.get('Authorization') || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  const payload = await verifyJwt(auth.slice(7), env.SUPABASE_JWT_SECRET);
+  if (!payload || payload.role !== 'authenticated' || !payload.sub) return null;
+  return payload;
 }

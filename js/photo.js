@@ -1,6 +1,6 @@
 // photo.js — Fotoğraf sıkıştırma, yükleme, silme
 
-import { DRIVE_URL } from "./config.js";
+import { DRIVE_URL, H } from "./config.js";
 import { app } from "./state.js";
 import { el, toast } from "./utils.js";
 import { isMisafir } from "./auth.js";
@@ -78,7 +78,7 @@ window.fotografEkle = async (i, input) => {
     try {
       const resp = await fetch(DRIVE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: H.Authorization },
         body: JSON.stringify({
           imageData: base64,
           fileName: Date.now() + "-" + dosya.name.replace(/[^a-zA-Z0-9._-]/g, "_"),
@@ -127,7 +127,7 @@ window.hasarFotoYukle = async (recId, asamaSira) => {
       try {
         const resp = await fetch(DRIVE_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: H.Authorization },
           body: JSON.stringify({
             imageData: base64,
             fileName: "HASAR-" + Date.now() + "-" + dosya.name.replace(/[^a-zA-Z0-9._-]/g, "_"),
