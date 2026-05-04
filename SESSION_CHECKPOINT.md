@@ -2,21 +2,16 @@
 
 **Son güncelleme:** 2026-05-04
 **Aktif faz:** Faz 1 — Backend & Infrastructure
-**Aktif madde:** ADIM 2 — P1-6 santiye_raporlar RLS — **USER_DECISION_NEEDED (SELECT politikası)**
+**Aktif madde:** ADIM 3 — OPEN-1 misafir_foto_okuma analizi
 
 ## Bu fazda tamamlanan
 - ✓ P1-12 (commit 7b5b8d2) — çift policy konsolidasyonu migration'ı
+- ✓ P1-6 (commit _pending_) — santiye_raporlar RLS sıkı sahiplik (USER_DECISION → A)
 
 ## Yarım kalan (varsa)
-- **ADIM 2 / P1-6** — SELECT policy seçimi için kullanıcı kararı bekleniyor.
-  MANUAL_TASKS.md → `[USER_DECISION_NEEDED] — P1-6 santiye_raporlar SELECT
-  politikası` bloğuna bak. INSERT sıkılaştırması (with check
-  `hazirlayan_email = auth.jwt() ->> 'email'`) net; SELECT için A/B/C seçimi
-  bekleniyor. Karar geldiğinde `migrations/2026-05-04_p1_santiye_raporlar_rls.sql`
-  yazılıp commit edilecek.
+_(yok)_
 
 ## Bu fazda kalan
-- ADIM 2 — P1-6 santiye_raporlar RLS bölge/sahiplik
 - ADIM 3 — OPEN-1 misafir_foto_okuma analizi
 - ADIM 4 — P1-3 Worker CORS Origin whitelist
 - ADIM 5 — P1-11 SISTEM_PROMPT defansif cümle

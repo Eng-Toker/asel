@@ -44,43 +44,39 @@ order by tablename;
 
 ---
 
-## [USER_DECISION_NEEDED] — P1-6 santiye_raporlar SELECT politikası
-- **Bağlam:** ADIM 2 (P1-6) için RLS yazıyorum. INSERT sıkılaştırması net:
-  `with check (hazirlayan_email = auth.jwt() ->> 'email')` — frontend zaten
-  `oturum.email`'i yazıyor (`js/modals/rapor.js:687`), kullanıcı sadece kendi
-  email'iyle yazabilir.
-  Ama SELECT politikasında iki eşit-makul yaklaşım var. Codebase'de **şu an
-  santiye_raporlar SELECT eden view YOK** (sadece INSERT var rapor.js:677'de).
-  Yani etkin sonuç şu an sıfır — ama policy seçimi gelecek (rapor geçmişi view'ı
-  eklendiğinde) UX'i belirler.
+## M2 — P1-6 santiye_raporlar RLS deploy
+- **Tip:** SQL (Supabase Dashboard)
+- **Önkoşul:** M1 (P1-12 deploy)
+- **Bloke ettiği:** P1-6 audit kapanışı, FAZ 1 doğrulama
+- **Karar:** USER_DECISION 2026-05-04 → **Seçenek A (sıkı sahiplik)**.
+  Kullanıcı sadece kendi email'iyle INSERT yapabilir ve sadece kendi raporlarını
+  okur. Future multi-admin görünürlüğü için P2 `user_bolgeleri` (AUDIT §11.2).
+- **Aksiyon:**
+  1. Supabase Dashboard → SQL Editor aç
+  2. `migrations/2026-05-04_p1_santiye_raporlar_rls.sql` içeriğini tek seferde çalıştır
+  3. Çıktıda hata olmadığını doğrula
+- **Doğrulama:**
+```sql
+-- 1) Policy listesi (rap_select + rap_insert beklenir, başka yok)
+select policyname, cmd, roles, qual, with_check
+from pg_policies
+where schemaname='public' and tablename='santiye_raporlar'
+order by policyname;
 
-- **Seçenekler:**
-  - **A) Sıkı sahiplik:** `using (hazirlayan_email = auth.jwt() ->> 'email')`
-    - Sonuç: her admin sadece kendi ürettiği raporları görür.
-    - Risk: future "rapor geçmişi" view eklenirse, admin B admin A'nın aynı
-      şantiye için ürettiği raporu göremez. Multi-admin proje paylaşımı
-      kapanır. Yeniden açmak için P2 `user_bolgeleri` tablosu (AUDIT §11.2)
-      gerekir.
-    - Uyum: audit'in "sahiplik kısıtlı" tavsiyesiyle %100 uyumlu.
-  - **B) Authenticated tümü:** `using (true)` (mevcut, sadece scope authenticated)
-    - Sonuç: her admin tüm raporları görebilir.
-    - Risk: PII admin grubu içinde geniş paylaşımlı. Multi-tenant olursa
-      bölgeler arası sızıntı.
-    - Uyum: audit'in "sahiplik" tavsiyesini SELECT için uygulamaz; sadece INSERT
-      sıkılaştırılır.
-  - **C) Hibrit (gelecek):** Supabase JWT'ye custom `bolge` claim ekle (Auth
-    Hook), `using (bolge = auth.jwt() ->> 'bolge')`.
-    - Risk: kapsam genişler — Supabase Auth Hook setup, kullanıcı→bölge
-      atamasının nereden geldiği kararı (DB'de yeni `user_bolgeleri` tablosu
-      gerekir). Bu Faz 1 değil; P2/Faz 3 işi.
-
-- **Önerim:** **A (sıkı sahiplik).** Şu an SELECT view yok, etki sıfır;
-  audit önerisiyle %100 hizalı; gelecekte view eklenirse o noktada (yine bir
-  policy migration'ı ile) genişletilebilir. B'yi seçmek için somut bir
-  iş ihtiyacı (multi-admin rapor paylaşımı) bilmem gerek.
-
-- **Bekleme noktası:** Commit 7b5b8d2 (P1-12 tamam). `migrations/2026-05-04_p1_santiye_raporlar_rls.sql`
-  dosyası HENÜZ YAZILMADI — kararını alınca tek migration'la INSERT+SELECT
-  birlikte yazılacak.
+-- 2) Davranış testi (kendi auth oturumunda Supabase SQL Editor "run as" admin):
+--    Kendi email'inle INSERT → ✓ başarılı
+--    Başka email ile INSERT → 42501 new row violates row-level security
+--    SELECT → sadece kendi satırların
+```
+- **Beklenen sonuç:** 1) iki satır (rap_select / rap_insert), her ikisi de
+  `{authenticated}` role; 2) davranış testi tutarlı.
+- **Rollback:** Eski açık policy'lere dönmek için:
+```sql
+drop policy if exists "rap_select" on santiye_raporlar;
+drop policy if exists "rap_insert" on santiye_raporlar;
+create policy "raporlar_read"  on santiye_raporlar for select to authenticated using (true);
+create policy "raporlar_write" on santiye_raporlar for insert to authenticated with check (true);
+```
+- **Status:** [ ]
 
 ---
