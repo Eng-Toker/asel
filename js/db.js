@@ -1,6 +1,6 @@
 // db.js — Supabase REST API wrapper (dbGet, dbPost, dbPatch, dbDelete, storeDel)
 
-import { SB, KEY, H, BKT } from "./config.js";
+import { SB, H, BKT } from "./config.js";
 
 export async function dbGet(t, q = "") {
   const r = await fetch(`${SB}/rest/v1/${t}${q ? "?" + q : ""}`, { headers: H });
@@ -36,7 +36,7 @@ export async function dbDelete(t, q) {
 export async function storeDel(paths) {
   await fetch(`${SB}/storage/v1/object/${BKT}`, {
     method: "DELETE",
-    headers: { apikey: KEY, Authorization: "Bearer " + KEY, "Content-Type": "application/json" },
+    headers: H,
     body: JSON.stringify({ prefixes: paths }),
   });
 }
