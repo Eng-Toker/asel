@@ -2,13 +2,18 @@
 
 **Son güncelleme:** 2026-05-04
 **Aktif faz:** Faz 1 — Backend & Infrastructure
-**Aktif madde:** ADIM 2 — P1-6 santiye_raporlar RLS sıkılaştır
+**Aktif madde:** ADIM 2 — P1-6 santiye_raporlar RLS — **USER_DECISION_NEEDED (SELECT politikası)**
 
 ## Bu fazda tamamlanan
-- ✓ P1-12 (commit _pending_) — çift policy konsolidasyonu migration'ı
+- ✓ P1-12 (commit 7b5b8d2) — çift policy konsolidasyonu migration'ı
 
 ## Yarım kalan (varsa)
-_(yok)_
+- **ADIM 2 / P1-6** — SELECT policy seçimi için kullanıcı kararı bekleniyor.
+  MANUAL_TASKS.md → `[USER_DECISION_NEEDED] — P1-6 santiye_raporlar SELECT
+  politikası` bloğuna bak. INSERT sıkılaştırması (with check
+  `hazirlayan_email = auth.jwt() ->> 'email'`) net; SELECT için A/B/C seçimi
+  bekleniyor. Karar geldiğinde `migrations/2026-05-04_p1_santiye_raporlar_rls.sql`
+  yazılıp commit edilecek.
 
 ## Bu fazda kalan
 - ADIM 2 — P1-6 santiye_raporlar RLS bölge/sahiplik
