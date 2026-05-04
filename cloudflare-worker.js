@@ -134,10 +134,12 @@ async function verifyMisafirParola(password, encoded) {
   const parts = encoded.split("$");
   if (parts.length !== 4 || parts[0] !== "pbkdf2-sha256") return false;
   const iter = parseInt(parts[1], 10);
-  // B17: iter alt+üst sınır. Üst sınır 1.5M = OWASP 2025 önerilen max
-  // (600k × 2.5 emniyet payı). Üst sınırsız bırakırsak yanlış set edilen
-  // GUEST_PASSWORD_HASH (örn. 999M iter) Worker CPU bomb'u olur.
-  if (!Number.isFinite(iter) || iter < 1 || iter > 1_500_000) return false;
+  // B17 + Cloudflare runtime limit: iter alt+üst sınır. Üst sınır 100k =
+  // Cloudflare Workers PBKDF2 hard limit ("iteration counts above 100000
+  // are not supported"). Bu üzerinde hash deriveBits() runtime'da fail eder
+  // ve catch → 401 ile yanlış parolaya benzer cevap döner. Hash üretirken
+  // scripts/hash_misafir_pass.mjs ITER=100000 ile sync.
+  if (!Number.isFinite(iter) || iter < 1 || iter > 100_000) return false;
   let salt, expected;
   try {
     salt     = _b64decode(parts[2]);

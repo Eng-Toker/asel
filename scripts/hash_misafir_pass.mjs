@@ -6,15 +6,17 @@
 //   (prompt'a yapıştırın)
 //
 // Format: pbkdf2-sha256$600000$<base64-salt>$<base64-hash>
-// Parametreler (P1-8 USER_DECISION 2026-05-04):
+// Parametreler (P1-8 USER_DECISION 2026-05-04 + Cloudflare runtime limit):
 //   - PBKDF2 / SHA-256
-//   - 600,000 iteration (OWASP 2023 minimum)
+//   - 100,000 iteration (Cloudflare Workers MAX — runtime hard limit;
+//     OWASP 2023 minimum 600k Workers'ta "Pbkdf2 failed: iteration counts
+//     above 100000 are not supported" hatası verir, doğrulanmıştır)
 //   - 16-byte random salt
 //   - 32-byte derived key
 
 import { webcrypto } from "node:crypto";
 
-const ITER = 600000;
+const ITER = 100000;
 const KEY_LEN = 32;
 const SALT_LEN = 16;
 
