@@ -105,6 +105,20 @@ function corsHeadersFor(request) {
   return headers;
 }
 
+// ─── PII maskeleme (P1-10) ─────────────────────────────────────────────────
+// Deterministic SHA-256 hash + server-side pepper. Aynı input → aynı çıktı
+// (log correlation için), pepper olmadan offline lookup imkansız (rainbow
+// table / dictionary attack koruması). Frontend pepper'ı asla görmez.
+// Format: "pii:" + ilk 12 hex (48 bit identifier — log için yeterince unique).
+async function maskPIIvalue(value, pepper) {
+  if (value == null || value === '') return value;
+  const norm = String(value).toLowerCase().trim();
+  const data = new TextEncoder().encode(norm + (pepper || ''));
+  const buf  = await crypto.subtle.digest('SHA-256', data);
+  const hex  = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return 'pii:' + hex.slice(0, 12);
+}
+
 export default {
   async fetch(request, env) {
     const corsHeaders = corsHeadersFor(request);
@@ -126,6 +140,38 @@ export default {
     const user = await requireAuth(request, env);
     if (!user) {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+    }
+
+    // ── /maskPII ─ deterministic PII hash (P1-10) ─────────────────────────────
+    // Body: { values: string[] } (en fazla 100). Response: { masked: string[] }.
+    // pii:<12 hex>. Pepper Worker secret (env.PII_PEPPER); set değilse 500.
+    if (path === '/maskPII') {
+      try {
+        if (!env.PII_PEPPER) {
+          return new Response(JSON.stringify({ error: 'PII_PEPPER yapılandırılmadı' }), {
+            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        const { values } = await request.json();
+        if (!Array.isArray(values)) {
+          return new Response(JSON.stringify({ error: 'values dizi olmalı' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        if (values.length > 100) {
+          return new Response(JSON.stringify({ error: 'En fazla 100 değer' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        const masked = await Promise.all(values.map((v) => maskPIIvalue(v, env.PII_PEPPER)));
+        return new Response(JSON.stringify({ masked }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // ── /rapor ─ AI ile teknik rapor 6 alanı üret (Gemini 2.5 Flash) ──────────

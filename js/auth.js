@@ -71,9 +71,20 @@ window.girisYap = async () => {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Giriş yapılıyor...'; }
   try {
     const data = await supabaseGiris(email, sifre);
-    const ad = KULLANICI_ADLARI[email] || email.split("@")[0];
-    _oturum = { email, ad, rol: "admin", token: data.access_token };
+    // Token'ı önce H'a yaz — maskPII fetch'i bu header'ı kullanır.
     Object.assign(H, tokenliHeader(data.access_token));
+    let ad = KULLANICI_ADLARI[email];
+    if (!ad) {
+      // Map'te yok → bundle'da local-part göstermek yerine deterministic
+      // pii: hash al (Worker secret pepper). Hata olursa "Admin" hard-mask.
+      _oturum = { email, ad: "Admin", rol: "admin", token: data.access_token };
+      try {
+        const { maskPII } = await import("./mask.js");
+        const masked = await maskPII(email);
+        ad = (typeof masked === "string" && masked.startsWith("pii:")) ? masked : "Admin";
+      } catch { ad = "Admin"; }
+    }
+    _oturum = { email, ad, rol: "admin", token: data.access_token };
     el("login-screen").style.display = "none";
     el("bolge-screen").style.display = "flex";
   } catch (err) {

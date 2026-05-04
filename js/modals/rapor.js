@@ -687,7 +687,9 @@ window.raporUret = async () => {
           hazirlayan_email: oturum.email || null,
         });
       } catch (e) {
-        console.warn("santiye_raporlar INSERT başarısız", e);
+        // PII koruması (P1-10): error obj satır verisini içerebilir; sadece
+        // mesaj/kod log'la, ham obje veya stack dump etme.
+        console.warn("santiye_raporlar INSERT başarısız:", e?.message || e?.code || "?");
         auditNot = "Rapor üretildi ve Drive'a yüklendi, ancak rapor geçmişine kaydedilemedi.";
         toast(auditNot, "warn", 6000);
       }
