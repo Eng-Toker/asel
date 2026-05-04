@@ -27,7 +27,10 @@ window.logExcelIndir = async () => {
     toast("Excel kütüphanesi yükleniyor...", "info", 1500);
     await new Promise((res, rej) => {
       const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+      s.integrity = "sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT";
+      s.crossOrigin = "anonymous";
+      s.referrerPolicy = "no-referrer";
       s.onload = res; s.onerror = rej;
       document.head.appendChild(s);
     }).catch(() => toast("Excel kütüphanesi yüklenemedi", "err"));
