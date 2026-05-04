@@ -2,6 +2,7 @@
 
 import { app } from "../state.js";
 import { el, esc, toast } from "../utils.js";
+import { isMisafir } from "../auth.js";
 import { dbPatch, dbPost, dbDelete } from "../db.js";
 import { registerRender } from "../router.js";
 import { renderSantiyeler } from "./projects.js";
@@ -9,6 +10,10 @@ import { renderSantiyeler } from "./projects.js";
 export function renderAyarlar() {
   const list = el("ayarlar-santiye-list");
   if (!list) return;
+  if (isMisafir()) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><div class="empty-title">Yetkisiz</div><div class="empty-desc">Misafirler ayarlara erişemez.</div></div>';
+    return;
+  }
   if (!app.santiyeler.length) {
     list.innerHTML = '<div class="empty"><div class="empty-icon">📂</div><div class="empty-title">Şantiye yok</div><div class="empty-desc">Aşağıdan ilk şantiyenizi ekleyin.</div></div>';
     return;
@@ -33,6 +38,7 @@ window.santiyeDuzenle = (i) => {
 };
 
 window.santiyeKaydet = async (i) => {
+  if (isMisafir()) { toast("Misafir şantiye düzenleyemez", "warn"); return; }
   const s = app.santiyeler[i];
   const eskiAd = typeof s === "object" ? s.name : s;
   const id     = typeof s === "object" ? s.id   : null;
@@ -53,6 +59,7 @@ window.santiyeKaydet = async (i) => {
 };
 
 window.santiyeEkle = async () => {
+  if (isMisafir()) { toast("Misafir şantiye ekleyemez", "warn"); return; }
   const input = el("ayarlar-santiye-input");
   const ad = input?.value.trim();
   if (!ad) { toast("Şantiye adı boş olamaz", "warn"); return; }
@@ -71,6 +78,7 @@ window.santiyeEkle = async () => {
 };
 
 window.santiyeSil = async (i) => {
+  if (isMisafir()) { toast("Misafir şantiye silemez", "warn"); return; }
   const s  = app.santiyeler[i];
   const ad = typeof s === "object" ? s.name : s;
   const id = typeof s === "object" ? s.id   : null;
