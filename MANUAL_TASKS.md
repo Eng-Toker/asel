@@ -5,6 +5,53 @@
 
 ---
 
+## M0 — PRE-DEPLOY CHECK: legacy duzenleyen değerleri (UX riski)
+- **Tip:** SQL inceleme (Supabase Dashboard, write yok)
+- **Önkoşul:** yok — TÜM M*'dan önce bu çalıştırılır
+- **Bloke ettiği:** kullanıcı kararı (backfill gerekli mi)
+- **Karar:** B3 deploy bloker (2026-05-04 user feedback). _MAPPED set
+  (`["abdulrahman", "deniz"]`) dışında kalan adminlerin DB'deki legacy
+  `duzenleyen` değerleri ham email veya email local-part olabilir; M8 deploy
+  sonrası dashboard `_piiGoster` fallback'i bunları "Admin" sabit string'e
+  döndürür → birden fazla kullanıcı aynı görünür (UX problemi, **security
+  değil**).
+- **Aksiyon:**
+  1. Supabase Dashboard → SQL Editor:
+  ```sql
+  -- 1) Mevcut benzersiz duzenleyen değerleri (sayım + ilk 50)
+  select duzenleyen, count(*) c
+  from santiye_log
+  where duzenleyen is not null and duzenleyen <> '—'
+  group by duzenleyen
+  order by c desc
+  limit 50;
+  ```
+  2. Çıktıyı incele:
+     - `Abdulrahman`, `Deniz`, `Misafir` → mapped/sentinel, **OK**.
+     - `pii:<12 hex>` → P1-10 sonrası yazımlar, **OK**.
+     - Diğer (örn. `user`, `ali`, `eng.adtoker@gmail.com`) → **legacy aday**.
+  3. Legacy aday sayısı:
+     - **0** → Aksiyon yok, deploy'a devam.
+     - **1-3** → Manuel UPDATE ile dashboard'da gösterilecek görünür ad
+       belirle (örn. `update santiye_log set duzenleyen = 'Ali Toker'
+       where duzenleyen = 'eng.adtoker';`). KULLANICI_ADLARI map'ine
+       de aynı kullanıcıyı ekle (auth.js, ayrı commit gerekir).
+     - **>3** → Backfill migration gerekir (Worker /maskPII'a batch
+       çağrısı + UPDATE — kapsam genişler, ayrı sprint adayı).
+- **Doğrulama (post-deploy):**
+  ```sql
+  -- Dashboard'da "Admin" görünen sayım
+  select count(distinct duzenleyen) c
+  from santiye_log
+  where duzenleyen is not null and duzenleyen <> '—'
+    and duzenleyen not in ('Abdulrahman','Deniz','Misafir')
+    and duzenleyen not like 'pii:%';
+  -- 0 = ideal; >1 = dashboard "Admin" çoklu görünür
+  ```
+- **Status:** [ ]
+
+---
+
 ## M1 — P1-12 policy consolidation migration deploy
 - **Tip:** SQL (Supabase Dashboard)
 - **Önkoşul:** ilk task
