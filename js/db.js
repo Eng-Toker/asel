@@ -34,9 +34,15 @@ export async function dbDelete(t, q) {
 }
 
 export async function storeDel(paths) {
-  await fetch(`${SB}/storage/v1/object/${BKT}`, {
+  // B1: r.ok kontrolü ekli — Storage 4xx/5xx silent kabul edilirse
+  // orphan dosya birikir, kullanıcı "silindi" toast'ı görür ama dosya kalır.
+  const r = await fetch(`${SB}/storage/v1/object/${BKT}`, {
     method: "DELETE",
     headers: H,
     body: JSON.stringify({ prefixes: paths }),
   });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    throw new Error(e.message || `Storage delete failed (${r.status})`);
+  }
 }
