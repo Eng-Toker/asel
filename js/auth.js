@@ -77,13 +77,28 @@ window.girisYap = async () => {
     Object.assign(H, tokenliHeader(data.access_token));
     let ad = KULLANICI_ADLARI[email];
     if (!ad) {
-      // Map'te yok → bundle'da local-part göstermek yerine deterministic
-      // pii: hash al (Worker secret pepper). Hata olursa "Admin" hard-mask.
+      // B2 (S3=A — login REDDET): Map miss durumunda Worker /maskPII'ya
+      // sor, BAŞARISIZ ise login engelle. "Admin" hard-mask collision riski
+      // kabul edilmiyor (audit trail integrity). Yeni admin için:
+      //   1. Supabase Auth'a kullanıcı ekle
+      //   2. js/auth.js KULLANICI_ADLARI map'ine email→ad satırı ekle
+      //   3. Worker secret PII_PEPPER set + binding deploy
+      let masked;
       try {
         const { maskPII } = await import("./mask.js");
-        const masked = await maskPII(email);
-        ad = (typeof masked === "string" && masked.startsWith("pii:")) ? masked : "Admin";
-      } catch { ad = "Admin"; }
+        masked = await maskPII(email);
+      } catch {
+        // Worker veya import erişilemez — H reset, login engelle.
+        Object.assign(H, { apikey: KEY, Authorization: "Bearer " + KEY, "Content-Type": "application/json" });
+        throw new Error("PII servisi erişilemez. Login engellendi — yöneticiyle iletişime geçin.");
+      }
+      if (typeof masked === "string" && masked.startsWith("pii:")) {
+        ad = masked;
+      } else {
+        // /maskPII responded ama pepper yok / format hatalı → engelle.
+        Object.assign(H, { apikey: KEY, Authorization: "Bearer " + KEY, "Content-Type": "application/json" });
+        throw new Error("Bu kullanıcı için ad yapılandırılmamış. Yöneticiyle iletişim (KULLANICI_ADLARI map'ine eklenmeli).");
+      }
     }
     _oturum = { email, ad, rol: "admin", token: data.access_token };
     el("login-screen").style.display = "none";
