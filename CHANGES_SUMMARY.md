@@ -8,7 +8,7 @@
 | OPEN-1 | ✓ kod | _pending_ | migrations/2026-05-04_p1_open1_storage_misafir_kapat.sql | Kararı kod analizi verdi (USER_DECISION değil): Storage upload kodu yok, frontend Drive URL kullanıyor → anon SELECT policy kapatılabilir, UX kırılmaz. Defansif DO bloku ile storage.objects'te kalan tüm anon/public policy'leri drop ediyor. M3 ek doğrulama: bucket envanter + record_fotograflar.file_url Storage formatında olmadığını teyit. |
 | P1-7 | ⬜ | — | — | — |
 | P1-2 | ⬜ | — | — | — |
-| P1-3 | ⬜ | — | — | — |
+| P1-3 | ✓ kod | _pending_ | cloudflare-worker.js (corsHeadersFor + whitelist) | Static set + preview pattern (`*.santiye-takipp.pages.dev`) + localhost. İzinsiz Origin için Allow-Origin yazılmaz (browser bloklar). Vary:Origin cache poisoning koruması. P0-17 Authorization preflight izni KORUNDU. |
 | P1-11 | ⬜ | — | — | — |
 
 ## Faz 2 — Frontend & Realtime

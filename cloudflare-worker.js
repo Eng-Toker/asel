@@ -46,14 +46,33 @@ ALANLAR
   ifadesi.
 - conclusionText: Sonuç, teknik kanaat ve sorumluluk değerlendirmesi.`;
 
+// ─── CORS Origin whitelist (P1-3) ───────────────────────────────────────────
+// İzinsiz Origin için Access-Control-Allow-Origin header'ı YAZILMAZ — browser
+// preflight veya actual response'u otomatik bloklar. Vary: Origin cache
+// poisoning'i engeller. P0-17 hotfix Authorization header izni KORUNDU.
+const ALLOWED_ORIGINS = new Set([
+  'https://santiye-takipp.pages.dev',
+  'http://localhost:8000',
+  'http://127.0.0.1:8000',
+]);
+const ALLOWED_ORIGIN_PATTERN = /^https:\/\/[a-z0-9-]+\.santiye-takipp\.pages\.dev$/;
+
+function corsHeadersFor(request) {
+  const origin = request.headers.get('Origin') || '';
+  const allowed = ALLOWED_ORIGINS.has(origin) || ALLOWED_ORIGIN_PATTERN.test(origin);
+  const headers = {
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
+  if (allowed) headers['Access-Control-Allow-Origin'] = origin;
+  return headers;
+}
+
 export default {
   async fetch(request, env) {
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey',
-      'Access-Control-Max-Age': '86400',
-    };
+    const corsHeaders = corsHeadersFor(request);
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
