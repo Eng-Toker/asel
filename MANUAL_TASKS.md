@@ -197,6 +197,32 @@ create policy "raporlar_write" on santiye_raporlar for insert to authenticated w
 
 ---
 
+## M2.5 — B32 santiye_log immutable (UPDATE+DELETE policy drop)
+- **Tip:** SQL (Supabase Dashboard) — atomik BEGIN/COMMIT
+- **Önkoşul:** M1 (l_update + l_delete policy'leri M1'de oluşturuldu)
+- **Bloke ettiği:** audit trail integrity (compliance/iç denetim)
+- **Karar:** AUDIT_REVIEW B32 (2026-05-04 ikinci audit). l_update + l_delete
+  policy'leri admin'in log satırlarını silmesine/değiştirmesine izin
+  veriyordu → audit trail mutable. santiye_raporlar pattern'iyle hizala.
+- **Aksiyon:**
+  ```sql
+  -- Dosya: migrations/2026-05-04_b32_santiye_log_immutable.sql
+  -- BEGIN/COMMIT atomic, dry-run için commit; → rollback;
+  ```
+  Supabase Dashboard → SQL Editor → tek seferde çalıştır.
+- **Doğrulama:**
+  ```sql
+  select policyname, cmd, roles
+  from pg_policies
+  where schemaname='public' and tablename='santiye_log'
+  order by policyname;
+  -- Beklenen: yalnızca l_select (SELECT) ve l_insert (INSERT)
+  ```
+- **Rollback:** Eski state için: `create policy "l_update" on santiye_log for update to authenticated using (true); create policy "l_delete" on santiye_log for delete to authenticated using (true);`
+- **Status:** [ ]
+
+---
+
 ## M3 — OPEN-1 storage misafir SELECT policy kapı
 - **Tip:** SQL (Supabase Dashboard) + opsiyonel doğrulama
 - **Önkoşul:** M1, M2 (sırayla)
@@ -454,31 +480,42 @@ curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
 
 ---
 
-## M9 — Worker-native Rate Limiting binding deploy
+## M9 — Worker-native Rate Limiting binding deploy (2 binding)
 - **Tip:** Cloudflare Worker binding (Wrangler veya Dashboard)
 - **Önkoşul:** M7 (GUEST_PASSWORD_HASH set). M9 binding M8 deploy'undan
-  ÖNCE veya ile birlikte yapılmalı (Worker code rate limit guard'ı
-  binding'i `env.MISAFIR_LOGIN_RL` üzerinden bekler; yoksa defansif
-  olarak skip eder ama koruma devreye girmez).
-- **Bloke ettiği:** /misafirLogin endpoint DoS koruması (PBKDF2 600k iter
-  her istekte ~200-500ms Worker CPU; brute force = CPU sömürüsü).
-- **Karar:** B4 redo (2026-05-04 user feedback). workers.dev üzerinde
-  custom WAF rule yapılamadığı için Worker-native Rate Limiting API
-  kullanıldı. wrangler.toml'a binding kaydedildi (single source of truth).
+  ÖNCE veya ile birlikte yapılmalı (Worker code rate limit guard'ları
+  binding'leri `env.MISAFIR_LOGIN_RL` ve `env.RAPOR_RL` üzerinden bekler;
+  yoksa defansif olarak skip eder ama koruma devreye girmez).
+- **Bloke ettiği:**
+  - **MISAFIR_LOGIN_RL:** /misafirLogin endpoint DoS koruması (PBKDF2 600k
+    iter her istekte ~200-500ms Worker CPU; brute force = CPU sömürüsü).
+  - **RAPOR_RL (B18):** /rapor endpoint Gemini cost/quota koruması (her
+    çağrı ~$0.001-0.005; spam = fatura kabarması).
+- **Karar:**
+  - B4 redo (2026-05-04 user feedback): MISAFIR_LOGIN_RL.
+  - AUDIT_REVIEW B18 (2026-05-04 ikinci audit): RAPOR_RL.
+  workers.dev üzerinde custom WAF rule yapılamadığı için Worker-native
+  Rate Limiting API kullanıldı. wrangler.toml'a 2 binding kaydedildi.
 - **Aksiyon — Yöntem A (Wrangler CLI, önerilen):**
   1. `npm install -g wrangler` (yoksa) + `wrangler login`
-  2. Repo root'unda `wrangler deploy` — wrangler.toml'daki
-     `[[unsafe.bindings]]` bloğu otomatik gelir, namespace_id 1001
-     ile binding oluşur, Worker yeni binding ile aktif olur.
-- **Aksiyon — Yöntem B (Cloudflare Dashboard manuel):**
+  2. Repo root'unda `wrangler deploy` — wrangler.toml'daki **iki**
+     `[[unsafe.bindings]]` bloğu otomatik gelir (MISAFIR_LOGIN_RL
+     namespace 1001, RAPOR_RL namespace 1002), Worker yeni binding'lerle
+     aktif olur.
+- **Aksiyon — Yöntem B (Cloudflare Dashboard manuel — 2 binding):**
   1. Dashboard → Workers & Pages → `drive-upload` → Settings → Bindings
-     → "Add binding" → "Rate Limiter".
-  2. Ayarlar:
+     → "Add binding" → "Rate Limiter" (×2).
+  2. Birinci binding:
      - **Variable name:** `MISAFIR_LOGIN_RL`
      - **Namespace ID:** `1001` (sayısal, hesap içinde unique)
      - **Limit:** `5`
      - **Period:** `60` (saniye)
-  3. Save → Worker yeni binding ile redeploy edilir.
+  3. İkinci binding (B18):
+     - **Variable name:** `RAPOR_RL`
+     - **Namespace ID:** `1002`
+     - **Limit:** `5`
+     - **Period:** `60` (saniye)
+  4. Save → Worker yeni binding'lerle redeploy edilir.
 - **Doğrulama:**
 
   > ⚠️  **DİKKAT — UX YAN ETKİSİ:** Bu test 6+ POST atıyor; rate limit
