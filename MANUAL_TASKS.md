@@ -191,9 +191,148 @@ curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/ \
 
 ---
 
+## M5 — Malzemeler errata policy konsolidasyonu (Faz 3 ADIM 11'de yazılacak)
+- **Tip:** SQL (Supabase Dashboard)
+- **Önkoşul:** M1, M2, M3 (DB tarafı sıralı)
+- **Bloke ettiği:** Audit P1 closure (malzemeler errata)
+- **Karar:** Faz 1 M1 doğrulamasında tespit edildi (3 SELECT policy, hepsi qual=true).
+  Lookup tablosu (id/name/sort_order/active/created_at), hassas data yok → tek
+  canonical policy `malzemeler_select for select to anon, authenticated using (true)`.
+- **Aksiyon:**
+  1. Supabase Dashboard → SQL Editor aç
+  2. `migrations/2026-05-04_p3_malzemeler_consolidation.sql` (Faz 3 ADIM 11'de
+     yazılacak) içeriğini tek seferde çalıştır
+  3. Çıktıda hata olmadığını doğrula
+- **Doğrulama:**
+```sql
+-- malzemeler tablosunda tek SELECT policy kalmalı
+select policyname, cmd, roles
+from pg_policies
+where schemaname='public' and tablename='malzemeler'
+order by policyname;
+```
+- **Beklenen sonuç:** Yalnızca `malzemeler_select` (anon+authenticated, using=true).
+- **Status:** [ ] (Faz 3 ADIM 11 commit'inden sonra çalıştırılır)
+
+---
+
+## M6 — PII_PEPPER Worker secret (P1-10)
+- **Tip:** Cloudflare Worker secret (`wrangler secret put` veya Dashboard UI)
+- **Önkoşul:** M1, M2, M3, M5 (DB tarafı bitince)
+- **Bloke ettiği:** Worker /maskPII endpoint çalışması — secret yoksa 500.
+  M8 deploy'undan ÖNCE secret eklenmeli.
+- **Karar:** Worker SHA-256 hash için server-side pepper. Frontend asla görmez.
+  Bir kerelik üret, asla rotate etme (rotate edilirse tüm cache'ler invalidate
+  olur ve mevcut DB'deki `duzenleyen` hash'leri orphan kalır).
+- **Aksiyon:**
+  1. Lokalde 32+ karakter rastgele string üret (hex de olur):
+     ```bash
+     openssl rand -hex 32
+     # veya
+     node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+     ```
+  2. Cloudflare Dashboard → Workers & Pages → `drive-upload` → Settings →
+     Variables → "Add variable" → Encrypt → name: `PII_PEPPER`, value: yukarıdaki
+     hex string. Save.
+  3. (Alternatif) `wrangler secret put PII_PEPPER` → prompt'a yapıştır.
+- **Doğrulama (M8 deploy'undan sonra):**
+```bash
+# Authenticated bir JWT ile (admin login + devtools network'ten kopyala)
+curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/maskPII \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"values":["test@example.com"]}'
+# Beklenen: 200 + {"masked":["pii:<12 hex>"]}
+# Aynı input → aynı hash (deterministic).
+```
+- **Rollback:** Secret'ı sil → /maskPII 500 döner → frontend cache miss
+  fallback'leri ("Admin" hard-mask) devreye girer (UX kırılmaz, sadece
+  yeni DB yazımları "Admin" sabit string olur — duzenleyen unique olmaz).
+- **Status:** [ ]
+
+---
+
+## M7 — GUEST_PASSWORD_HASH Worker secret (P1-8)
+- **Tip:** Cloudflare Worker secret
+- **Önkoşul:** M1, M2, M3, M5, M6 (sırayla)
+- **Bloke ettiği:** Worker /misafirLogin endpoint çalışması — secret yoksa 500
+  (giriş yapamaz). M8 deploy'undan ÖNCE secret eklenmeli.
+- **Karar:** USER_DECISION 2026-05-04 → B (PBKDF2 SHA-256, 600k iter, 16-byte
+  salt, 32-byte derived key). Mevcut "ASEL2026" parolası hash'lenir (rotation
+  yapılmıyor — UX süreklilik).
+- **Aksiyon:**
+  1. Lokalde repo'da `scripts/hash_misafir_pass.mjs` çalıştır:
+     ```bash
+     node scripts/hash_misafir_pass.mjs "ASEL2026"
+     # Çıktı: pbkdf2-sha256$600000$<base64-salt>$<base64-hash>
+     ```
+  2. Cloudflare Dashboard → Workers & Pages → `drive-upload` → Settings →
+     Variables → "Add variable" → Encrypt → name: `GUEST_PASSWORD_HASH`,
+     value: yukarıdaki tam string (pbkdf2-sha256$... ile başlayan). Save.
+  3. (Alternatif) `wrangler secret put GUEST_PASSWORD_HASH` → prompt'a yapıştır.
+- **Parola rotasyonu (gelecekte):** Yeni parola için aynı script'i farklı
+  argümanla çalıştır → yeni hash → Dashboard'dan secret value'sunu güncelle.
+  Aktif kullanıcılar etkilenmez (frontend hep aynı endpoint'e POST eder).
+- **Doğrulama (M8 deploy'undan sonra):**
+```bash
+# Yanlış parola
+curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
+  -H "Content-Type: application/json" \
+  -d '{"password":"YANLIS"}'
+# Beklenen: 401 + {"ok":false}
+
+# Doğru parola
+curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
+  -H "Content-Type: application/json" \
+  -d '{"password":"ASEL2026"}'
+# Beklenen: 200 + {"ok":true}
+```
+- **Rollback:** Secret'ı sil → /misafirLogin 500 → misafir girişi devre dışı.
+  Geçici olarak: eski plaintext check'i geri al ve frontend'i revert (commit
+  5f6645b'in tersi). Ancak production'da bunu yapmayın — bunun yerine yeni
+  hash üretip secret'ı doğru değerle güncelleyin.
+- **Status:** [ ]
+
+---
+
+## M8 — Faz 2 Worker bundle deploy (P1-10 + P1-8)
+- **Tip:** Cloudflare Worker Direct Deploy
+- **Önkoşul:** M1, M2, M3, M5, M6 (PII_PEPPER), M7 (GUEST_PASSWORD_HASH).
+  Secret'lar deploy'dan ÖNCE eklenmeli; aksi halde yeni endpoint'ler 500 döner.
+- **Bloke ettiği:** Faz 2 endpoint'lerinin (`/maskPII`, `/misafirLogin`)
+  production'da aktif olması.
+- **Kapsam (tek bundle, M4'ün üzerine):**
+  - P1-10 (commit `23b2ddb`): maskPIIvalue helper + `/maskPII` endpoint
+  - P1-8 (commit `5f6645b`): verifyMisafirParola helper + `/misafirLogin`
+    endpoint (auth-OPEN, requireAuth gate'inden önce)
+- **Birleştirme notu:** Eğer M4 zaten deploy edilmediyse, M4 + M8'in tek
+  Worker deploy'unda bundle'lanması mümkün — `cloudflare-worker.js` working
+  tree HEAD halihazırda Faz 1 + Faz 2 tüm Worker değişikliklerini içeriyor.
+  Pratik olarak: M4 atlanabilir, M8 tek başına FULL bundle'dır. Ardışık
+  iki deploy gereksiz.
+- **Aksiyon:**
+  1. Cloudflare Dashboard → Workers & Pages → `drive-upload` Worker
+  2. "Edit code" → mevcut `cloudflare-worker.js` içeriğini repo'daki son hâliyle
+     değiştir
+  3. "Save and Deploy" → yeni version aktif
+  4. Deploy log'unda hata olmadığını doğrula
+- **Doğrulama:** Yukarıda M6 ve M7'deki curl testleri.
+- **Rollback:** Cloudflare Workers UI → Deployments → bir önceki version →
+  "Rollback to this deployment".
+- **Status:** [ ]
+
+---
+
 ## [USER_DECISION_NEEDED] — P1-7 Drive restricted scope ve eski URL migration politikası
 
-**[KARAR: D — ertelendi (2026-05-04). Faz 2 sonu yeniden değerlendirilecek. B3 (HMAC short-lived token) implementation pattern'i not olarak kalsın.]**
+**[KARAR: D+errata — P3-DEVİR (2026-05-04 Faz 2 sonu USER_DECISION). Resmi olarak P3 maddesi. AUDIT_FINAL §4 #7 satırında P1 closure yarım değil — taşınmış item.]**
+
+**Önceki karar:** D (2026-05-04 Faz 1 sonu, ertelendi → Faz 2 sonu yeniden değerlendirme).
+
+**Faz 2 sonu yeniden değerlendirme:** Maliyet ölçümü yapıldı (Worker 2 endpoint kaldır + 2 yeni endpoint + HMAC helper + 4-5 frontend dosya = ~150 satır atomik). Faz 2'de gezilmesi beklenen frontend dosyaları (detail.js, lightbox.js, photo.js form preview) Faz 2 turunda DEĞİŞMEDİ — yalnız dashboard.js (P1-14) ve rapor.js (P1-10 defansif daraltma) dokunuldu. Yani brief'in "Faz 2 frontend turuyla birleştirme" gerekçesi tezahür etmedi. Threat profile düşük: 2 user, kapalı pool, unguessable Drive URL. P3 hijyen + ileri kapsam için uygun.
+
+> Bu blok REFERANS amaçlı tutuluyor (silinmedi). P3'te tekrar açılırsa burada
+> özetlenen 4 seçenek + B3 alternatifi yeniden değerlendirme zemini olur.
 
 > Bu blok REFERANS amaçlı tutuluyor (silinmedi). P1-7 Faz 2 sonunda
 > tekrar açılırsa burada özetlenen 4 seçenek + B3 alternatifi yeniden
