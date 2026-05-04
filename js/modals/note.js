@@ -20,6 +20,7 @@ window.notModalKapat = () => {
 };
 
 window.notKaydet = async () => {
+  if (isMisafir()) { toast("Misafir not yazamaz", "warn"); return; }
   const metin   = el("not-textarea").value.trim();
   const santiye = app.secilenSantiye;
   el("not-status").textContent = "Kaydediliyor...";
