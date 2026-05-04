@@ -50,5 +50,7 @@ coverage/
 # - AUDIT_FINAL.md           → audit dökümanı (track edilmeli, edildi)
 # - AUDIT_GRUP1-5_OZET.md    → audit özet (TRACK ET — sonraki commit'te)
 # - HANDOFF.md               → handoff notu (TRACK ET — sonraki commit'te)
-# Sadece .claude/ git'ten dışlanır, diğerleri repo dökümanları.
+# - MIMARI.md                → kişisel mimari notlar (USER_DECISION S6 → C: ignore)
+# Sadece .claude/ ve MIMARI.md git'ten dışlanır, diğerleri repo dökümanları.
 .claude/
+MIMARI.md
