@@ -1,8 +1,17 @@
 # SESSION_CHECKPOINT.md
 
 **Son güncelleme:** 2026-05-04
-**Aktif faz:** **FAZ 2 + FAZ 3 TAMAMLANDI** — manuel deploy turuna hazır (M1-M8)
-**Aktif madde:** _yok — kullanıcı manuel deploy + smoke test bekliyor_
+**Aktif faz:** **FAZ 2 + FAZ 3 TAMAMLANDI + DEPLOY BLOKER'LAR (B1-B7) KAPATILDI**
+**Aktif madde:** _yok — kullanıcı manuel deploy turuna hazır (M-1, M0, M1-M9)_
+
+## Deploy bloker'lar (2026-05-04, kullanıcı feedback)
+- ✓ B1 (commit fc5681a) — M2 defansif DROP POLICY DO bloğu + dry-run talimatı
+- ✓ B2 (commit 847f0a3) — auth.js _oturum atomic (race fix); mask.js H'dan token okur
+- ✓ B3 (commit 8916644) — M0 pre-deploy check: legacy duzenleyen UX riski
+- ✓ B4 (commit b42acda) — M9 Cloudflare WAF rule /misafirLogin 5 req/min/IP
+- ✓ B5 (commit b1231cb) — M6 PII_PEPPER rotation politikası + determinism test
+- ✓ B6 (commit 76cbdc6) — M-1 default branch main rename pre-deploy task
+- ✓ B7 (commit a76336c) — smoke.sh +3 case (RLS, CORS keskin, WS heartbeat)
 
 ## Faz 3'te tamamlanan
 - ✓ ADIM 9  / P2-1  (commit 353b534) — .gitignore + .cfignore + repo docs track
@@ -40,17 +49,23 @@ _(yok)_
   devir notu. MANUAL_TASKS USER_DECISION bloğunda 4 seçenek + B3 HMAC
   short-lived token pattern referansta.
 
-## Manuel deploy turu (kullanıcı, sırasıyla)
-1. **M1** — Supabase: migrations/2026-05-04_p1_policy_consolidation.sql
-2. **M2** — Supabase: migrations/2026-05-04_p1_santiye_raporlar_rls.sql
-3. **M3** — Supabase: migrations/2026-05-04_p1_open1_storage_misafir_kapat.sql
-4. **M5** — Supabase: migrations/2026-05-04_p3_malzemeler_consolidation.sql
-5. **M6** — Cloudflare: PII_PEPPER secret (`openssl rand -hex 32`)
-6. **M7** — Cloudflare: GUEST_PASSWORD_HASH secret
-   (`node scripts/hash_misafir_pass.mjs "ASEL2026"` → çıktıyı yapıştır)
-7. **M4 + M8 birleşik** — Cloudflare Worker bundled deploy
-   (working tree HEAD = Faz 1+2 tüm Worker değişiklikleri)
-8. **Smoke** — `bash scripts/smoke.sh <FRONTEND_URL> <WORKER_URL> <JWT>`
+## Manuel deploy turu (kullanıcı, sırasıyla — bloker fix sonrası güncel)
+1. **M-1** — GitHub default branch `main` rename + Cloudflare Pages branch sync
+2. **M0**  — PRE-DEPLOY CHECK: SELECT DISTINCT duzenleyen FROM santiye_log (UX)
+3. **M1**  — Supabase: migrations/2026-05-04_p1_policy_consolidation.sql
+4. **M2**  — Supabase: migrations/2026-05-04_p1_santiye_raporlar_rls.sql
+            (BEGIN; <SQL>; ROLLBACK; dry-run önce)
+5. **M3**  — Supabase: migrations/2026-05-04_p1_open1_storage_misafir_kapat.sql
+6. **M5**  — Supabase: migrations/2026-05-04_p3_malzemeler_consolidation.sql
+7. **M6**  — Cloudflare: PII_PEPPER secret (`openssl rand -hex 32`)
+            + determinism test (a@x 2 kez = aynı, a@x ≠ b@x)
+8. **M7**  — Cloudflare: GUEST_PASSWORD_HASH secret
+            (`node scripts/hash_misafir_pass.mjs "ASEL2026"`)
+9. **M4+M8 birleşik** — Cloudflare Worker bundled deploy (FULL)
+10. **M9** — Cloudflare WAF rule: /misafirLogin 5 req/min/IP (post-deploy)
+11. **Smoke** — `bash scripts/smoke.sh <FE> <WORKER> <SUPABASE_URL> <ANON_KEY> <JWT>`
+            10 test: frontend + 2× CORS + 2× /upload + /misafirLogin +
+            /maskPII + RLS sanity + CORS keskin + WS heartbeat
 
 Detaylar: MANUAL_TASKS.md.
 
