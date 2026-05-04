@@ -8,10 +8,14 @@
 - ✓ B1 (commit fc5681a) — M2 defansif DROP POLICY DO bloğu + dry-run talimatı
 - ✓ B2 (commit 847f0a3) — auth.js _oturum atomic (race fix); mask.js H'dan token okur
 - ✓ B3 (commit 8916644) — M0 pre-deploy check: legacy duzenleyen UX riski
-- ✓ B4 (commit b42acda) — M9 Cloudflare WAF rule /misafirLogin 5 req/min/IP
+- ✓ B4 (commit b42acda → REDO cd0d315) — Worker-native rate limit
+  /misafirLogin (workers.dev'de WAF custom rule yok; wrangler.toml +
+  binding + handler guard)
 - ✓ B5 (commit b1231cb) — M6 PII_PEPPER rotation politikası + determinism test
 - ✓ B6 (commit 76cbdc6) — M-1 default branch main rename pre-deploy task
 - ✓ B7 (commit a76336c) — smoke.sh +3 case (RLS, CORS keskin, WS heartbeat)
+- ✓ NIT'ler (commit 304b4d1) — B1 BEGIN/COMMIT, B3 3-tablo genişlet,
+  B6 Pages adımı sil, B7 Test 8 sıkı + Test 10 ws precheck
 
 ## Faz 3'te tamamlanan
 - ✓ ADIM 9  / P2-1  (commit 353b534) — .gitignore + .cfignore + repo docs track
