@@ -183,9 +183,22 @@ export default {
     // ── /misafirLogin ─ misafir parola PBKDF2 verify (P1-8) ──────────────────
     // Auth-OPEN endpoint (login event'in kendisi). GUEST_PASSWORD_HASH
     // secret yoksa 500. Hata mesajı timing-safe kalmak için sabit/kısa.
-    // Rate limiting bu endpoint için P3 (brief skip).
+    // Rate limit (B4 redo): IP başına 5 req / 60s — Worker-native Rate
+    // Limiting binding (env.MISAFIR_LOGIN_RL). Brute force DoS koruması
+    // (PBKDF2 600k iter ~200-500ms CPU/req).
     if (path === '/misafirLogin') {
       try {
+        // Rate limit GUARD — handler'ın ilk satırı. Binding yoksa skip
+        // (defansif: M9 deploy edilmemişse endpoint çalışır ama korunmaz).
+        if (env.MISAFIR_LOGIN_RL) {
+          const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+          const { success } = await env.MISAFIR_LOGIN_RL.limit({ key: ip });
+          if (!success) {
+            return new Response(JSON.stringify({ ok: false, error: 'Çok fazla deneme. Bir dakika sonra tekrar deneyin.' }), {
+              status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+            });
+          }
+        }
         if (!env.GUEST_PASSWORD_HASH) {
           return new Response(JSON.stringify({ ok: false, error: 'GUEST_PASSWORD_HASH yapılandırılmadı' }), {
             status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

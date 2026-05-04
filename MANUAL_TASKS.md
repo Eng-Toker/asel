@@ -440,37 +440,50 @@ curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
 
 ---
 
-## M9 — Cloudflare WAF / Rate Limiting Rule: /misafirLogin
-- **Tip:** Cloudflare Dashboard (kod yok, tek tık)
-- **Önkoşul:** M7 (GUEST_PASSWORD_HASH set), M4/M8 Worker bundle deploy
-- **Bloke ettiği:** /misafirLogin endpoint'inin DoS koruması (PBKDF2 600k iter
+## M9 — Worker-native Rate Limiting binding deploy
+- **Tip:** Cloudflare Worker binding (Wrangler veya Dashboard)
+- **Önkoşul:** M7 (GUEST_PASSWORD_HASH set). M9 binding M8 deploy'undan
+  ÖNCE veya ile birlikte yapılmalı (Worker code rate limit guard'ı
+  binding'i `env.MISAFIR_LOGIN_RL` üzerinden bekler; yoksa defansif
+  olarak skip eder ama koruma devreye girmez).
+- **Bloke ettiği:** /misafirLogin endpoint DoS koruması (PBKDF2 600k iter
   her istekte ~200-500ms Worker CPU; brute force = CPU sömürüsü).
-- **Karar:** B4 deploy bloker (2026-05-04 user feedback). P3'e öteleme;
-  deploy turunun parçası.
-- **Aksiyon:**
-  1. Cloudflare Dashboard → drive-upload Worker zone'u (workers.dev) →
-     Security → WAF → "Custom rules" veya "Rate limiting rules" → "Create".
-  2. Rule ayarları:
-     - **Field:** URI Path
-     - **Operator:** equals
-     - **Value:** `/misafirLogin`
-     - **Method:** POST
-     - **Rate:** 5 requests / 1 minute / per IP
-     - **Action:** Block (veya Challenge — block tercih edilir)
-     - **Response:** 429 Too Many Requests
-  3. Save & deploy.
+- **Karar:** B4 redo (2026-05-04 user feedback). workers.dev üzerinde
+  custom WAF rule yapılamadığı için Worker-native Rate Limiting API
+  kullanıldı. wrangler.toml'a binding kaydedildi (single source of truth).
+- **Aksiyon — Yöntem A (Wrangler CLI, önerilen):**
+  1. `npm install -g wrangler` (yoksa) + `wrangler login`
+  2. Repo root'unda `wrangler deploy` — wrangler.toml'daki
+     `[[unsafe.bindings]]` bloğu otomatik gelir, namespace_id 1001
+     ile binding oluşur, Worker yeni binding ile aktif olur.
+- **Aksiyon — Yöntem B (Cloudflare Dashboard manuel):**
+  1. Dashboard → Workers & Pages → `drive-upload` → Settings → Bindings
+     → "Add binding" → "Rate Limiter".
+  2. Ayarlar:
+     - **Variable name:** `MISAFIR_LOGIN_RL`
+     - **Namespace ID:** `1001` (sayısal, hesap içinde unique)
+     - **Limit:** `5`
+     - **Period:** `60` (saniye)
+  3. Save → Worker yeni binding ile redeploy edilir.
 - **Doğrulama:**
   ```bash
-  # 6 ardışık istek (5'i geçer, 6.sı 429)
-  for i in 1 2 3 4 5 6; do
+  # 6 ardışık istek (5'i geçer (401 — yanlış parola),
+  # 6.sı 429 dönmeli — Retry-After: 60)
+  for i in 1 2 3 4 5 6 7; do
     curl -o /dev/null -s -w "req $i: %{http_code}\n" \
       -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
       -H "Content-Type: application/json" \
-      -d '{"password":"X"}'
+      -d '{"password":"WRONG_TEST_PROBE"}'
   done
-  # Beklenen: ilk 5 → 401, 6. → 429
+  # Beklenen: ilk 5 → 401, 6+ → 429.
+  # NOT: Test'i çalıştırırken kendi IP'nizden 60s rate limit window
+  # aktif olur — gerçek girişler 1 dakika boyunca da bloklanabilir.
   ```
-- **Rollback:** WAF rule'u devre dışı bırak veya sil.
+- **Rollback:**
+  - Yöntem A: wrangler.toml'dan `[[unsafe.bindings]]` bloğunu sil +
+    `wrangler deploy`. Worker code defansif (`if (env.MISAFIR_LOGIN_RL)`)
+    olduğu için rate limit pasif kalır, endpoint normal çalışır.
+  - Yöntem B: Dashboard'dan binding'i sil + Worker redeploy.
 - **Status:** [ ]
 
 ---
