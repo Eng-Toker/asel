@@ -2,20 +2,20 @@
 
 **Son güncelleme:** 2026-05-04
 **Aktif faz:** Faz 1 — Backend & Infrastructure
-**Aktif madde:** ADIM 6 — P1-2 Worker file validation
+**Aktif madde:** ADIM 7 — P1-7 Drive restricted + signed proxy (USER_DECISION beklenen)
 
 ## Bu fazda tamamlanan
 - ✓ P1-12 (commit 7b5b8d2) — çift policy konsolidasyonu migration'ı
 - ✓ P1-6 (commit e90d193) — santiye_raporlar RLS sıkı sahiplik (USER_DECISION → A)
 - ✓ OPEN-1 (commit ec8386c) — storage misafir SELECT kapı (kod kanıtıyla)
 - ✓ P1-3 (commit 8c8324d) — Worker CORS Origin whitelist
-- ✓ P1-11 (commit _pending_) — SISTEM_PROMPT defansif madde
+- ✓ P1-11 (commit fc3f732) — SISTEM_PROMPT defansif madde
+- ✓ P1-2 (commit _pending_) — Worker /upload file validation
 
 ## Yarım kalan (varsa)
 _(yok)_
 
 ## Bu fazda kalan
-- ADIM 6 — P1-2 Worker file validation (size + MIME + magic + ext)
 - ADIM 7 — P1-7 Drive restricted + signed proxy (USER_DECISION beklenen — eski URL migration politikası)
 - ADIM 5 — P1-11 SISTEM_PROMPT defansif cümle
 - ADIM 6 — P1-2 Worker file validation

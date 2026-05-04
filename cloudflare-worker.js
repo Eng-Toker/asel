@@ -53,6 +53,34 @@ ALANLAR
   ifadesi.
 - conclusionText: Sonuç, teknik kanaat ve sorumluluk değerlendirmesi.`;
 
+// ─── /upload file validation (P1-2) ─────────────────────────────────────────
+const UPLOAD_MAX_RAW_BYTES = 10 * 1024 * 1024;
+const UPLOAD_ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const UPLOAD_ALLOWED_EXTS  = new Set(['jpg', 'jpeg', 'png', 'webp']);
+
+function uploadDeclaredMime(imageData) {
+  const m = /^data:([\w\/+\.\-]+);base64,/.exec(imageData || '');
+  return m ? m[1].toLowerCase() : '';
+}
+
+function uploadFileExt(fileName) {
+  const m = /\.([a-z0-9]+)$/i.exec(fileName || '');
+  return m ? m[1].toLowerCase() : '';
+}
+
+function uploadMagicMime(bytes) {
+  if (!bytes || bytes.length < 12) return null;
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+      bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) return 'image/png';
+  // WEBP: RIFF....WEBP (bytes 0-3 RIFF, bytes 8-11 WEBP)
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return null;
+}
+
 // ─── CORS Origin whitelist (P1-3) ───────────────────────────────────────────
 // İzinsiz Origin için Access-Control-Allow-Origin header'ı YAZILMAZ — browser
 // preflight veya actual response'u otomatik bloklar. Vary: Origin cache
@@ -178,9 +206,55 @@ export default {
       }
     }
 
-    // ── Varsayılan ─ fotoğraf yükleme (mevcut akış, DOKUNULMADI) ──────────────
+    // ── Varsayılan ─ fotoğraf yükleme ─────────────────────────────────────────
     try {
       const { imageData, fileName, santiye, alan, bolge } = await request.json();
+
+      // P1-2: file validation (size + MIME + magic + ext + path traversal)
+      const declaredMime = uploadDeclaredMime(imageData);
+      if (!UPLOAD_ALLOWED_MIMES.has(declaredMime)) {
+        return new Response(JSON.stringify({ error: 'Geçersiz veya eksik MIME tipi (jpeg/png/webp)' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (typeof fileName !== 'string' || !fileName ||
+          fileName.includes('/') || fileName.includes('\\') || fileName.includes('..')) {
+        return new Response(JSON.stringify({ error: 'Geçersiz dosya adı' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!UPLOAD_ALLOWED_EXTS.has(uploadFileExt(fileName))) {
+        return new Response(JSON.stringify({ error: 'Geçersiz dosya uzantısı (jpg/jpeg/png/webp)' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+      let binary;
+      try {
+        binary = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'Base64 çözümlenemedi' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (binary.length > UPLOAD_MAX_RAW_BYTES) {
+        return new Response(JSON.stringify({ error: `Dosya çok büyük (max ${UPLOAD_MAX_RAW_BYTES} byte)` }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const actualMime = uploadMagicMime(binary);
+      if (!actualMime) {
+        return new Response(JSON.stringify({ error: 'Dosya içeriği desteklenen image formatı değil' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (actualMime !== declaredMime) {
+        return new Response(JSON.stringify({ error: `MIME uyumsuzluğu (declared: ${declaredMime}, magic: ${actualMime})` }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const accessToken = await getAccessToken(env);
 
       const bugun = new Date().toLocaleDateString('tr-TR', {
@@ -193,9 +267,6 @@ export default {
       const santiyeId = await klasorBulVeyaOlustur(accessToken, bolgeId, santiye);
       const tarihId   = await klasorBulVeyaOlustur(accessToken, santiyeId, bugun);
       const alanId    = await klasorBulVeyaOlustur(accessToken, tarihId, alan);
-
-      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
-      const binary = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
       const fileId = await driveMultipartYukle(accessToken, alanId, fileName, 'image/jpeg', binary);
 
