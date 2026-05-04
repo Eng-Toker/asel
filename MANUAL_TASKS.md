@@ -480,19 +480,40 @@ curl -i -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
      - **Period:** `60` (saniye)
   3. Save → Worker yeni binding ile redeploy edilir.
 - **Doğrulama:**
+
+  > ⚠️  **DİKKAT — UX YAN ETKİSİ:** Bu test 6+ POST atıyor; rate limit
+  > kullanıcının kendi (test çalıştıran) IP'sini **60 saniye boyunca
+  > 429'a kilitler**. Şirket/ofis WiFi'sı tek dış IP üzerinden çıkıyorsa
+  > **tüm misafir kullanıcılar** o pencerede `/misafirLogin`'e
+  > erişemez. Çalıştırmadan önce iki opsiyon:
+  >
+  > 1. **Sessiz saatte çalıştır** (örn. mesai dışı, kimse misafir
+  >    girmiyor) — 60s pencere geçince sorun yok.
+  > 2. **Farklı IP'den çalıştır** (mobil hotspot, VPN, başka ağ).
+  > 3. **Test'i atla** — wrangler.toml + binding doğru deploy
+  >    edildiyse rate limit zaten Cloudflare runtime'da aktif;
+  >    smoke test'in production fonksiyonel doğrulaması bu test
+  >    olmadan da yeterli.
+
+  Eğer hâlâ çalıştırmak istiyorsanız, `RUN_RL_TEST=1` opsiyonel flag
+  pattern'i ile bilinçli bir tetik:
   ```bash
-  # 6 ardışık istek (5'i geçer (401 — yanlış parola),
-  # 6.sı 429 dönmeli — Retry-After: 60)
-  for i in 1 2 3 4 5 6 7; do
-    curl -o /dev/null -s -w "req $i: %{http_code}\n" \
-      -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
-      -H "Content-Type: application/json" \
-      -d '{"password":"WRONG_TEST_PROBE"}'
-  done
-  # Beklenen: ilk 5 → 401, 6+ → 429.
-  # NOT: Test'i çalıştırırken kendi IP'nizden 60s rate limit window
-  # aktif olur — gerçek girişler 1 dakika boyunca da bloklanabilir.
+  if [ "${RUN_RL_TEST:-0}" = "1" ]; then
+    # 6 ardışık istek (5'i geçer (401 — yanlış parola),
+    # 6.sı 429 dönmeli — Retry-After: 60)
+    for i in 1 2 3 4 5 6 7; do
+      curl -o /dev/null -s -w "req $i: %{http_code}\n" \
+        -X POST https://drive-upload.eng-adtoker.workers.dev/misafirLogin \
+        -H "Content-Type: application/json" \
+        -d '{"password":"WRONG_TEST_PROBE"}'
+    done
+    # Beklenen: ilk 5 → 401, 6+ → 429.
+  else
+    echo "RL doğrulama atlandı (RUN_RL_TEST=1 ile aç)"
+  fi
   ```
+  smoke.sh'a EKLENMEDİ — production WiFi blokunu otomatize etmemek için
+  bilinçli karar.
 - **Rollback:**
   - Yöntem A: wrangler.toml'dan `[[unsafe.bindings]]` bloğunu sil +
     `wrangler deploy`. Worker code defansif (`if (env.MISAFIR_LOGIN_RL)`)

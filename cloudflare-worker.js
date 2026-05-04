@@ -105,6 +105,10 @@ function corsHeadersFor(request) {
   return headers;
 }
 
+// /misafirLogin rate limit Retry-After sabiti — wrangler.toml'daki
+// [[unsafe.bindings]] simple.period değeri ile sync tutulmalı (drift önleme).
+const MISAFIR_LOGIN_RL_PERIOD_SEC = 60;
+
 // ─── Misafir parola PBKDF2 verify (P1-8) ───────────────────────────────────
 // Format: pbkdf2-sha256$<iter>$<base64-salt>$<base64-hash>
 // Constant-time compare manuel (Web Crypto'da timingSafeEqual yok).
@@ -191,11 +195,34 @@ export default {
         // Rate limit GUARD — handler'ın ilk satırı. Binding yoksa skip
         // (defansif: M9 deploy edilmemişse endpoint çalışır ama korunmaz).
         if (env.MISAFIR_LOGIN_RL) {
-          const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+          // CF-Connecting-IP Cloudflare pipeline'ından geçen her istekte var.
+          // Yoksa istek Cloudflare DIŞINDAN doğrudan Worker'a gelmiş demektir
+          // (suspicious edge case) — fallback bucket yerine 400 reject.
+          // randomUUID gibi unique key kullanmak rate limit'i tamamen kıracaktı
+          // (her istek farklı bucket → limit asla tetiklenmez).
+          const ip = request.headers.get('CF-Connecting-IP');
+          if (!ip) {
+            return new Response(JSON.stringify({ ok: false, error: 'Missing CF-Connecting-IP' }), {
+              status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
           const { success } = await env.MISAFIR_LOGIN_RL.limit({ key: ip });
           if (!success) {
+            // Cloudflare Logs'a düşer — saldırı tespiti / monitoring için.
+            // Yüksek trafik altında log spam olursa ileride sample/throttle.
+            console.warn(JSON.stringify({
+              event: 'rate_limit_triggered',
+              endpoint: '/misafirLogin',
+              ip,
+              ts: Date.now(),
+            }));
             return new Response(JSON.stringify({ ok: false, error: 'Çok fazla deneme. Bir dakika sonra tekrar deneyin.' }), {
-              status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+              status: 429,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
+                'Retry-After': String(MISAFIR_LOGIN_RL_PERIOD_SEC),
+              },
             });
           }
         }
