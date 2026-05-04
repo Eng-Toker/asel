@@ -30,6 +30,7 @@ export function sikistir(dosya) {
 }
 
 window.kameraAc = (i) => {
+  if (isMisafir()) { toast("Misafir foto yükleyemez", "warn"); return; }
   const input = document.createElement("input");
   input.type = "file"; input.accept = "image/*";
   if (/Android|iPhone|iPad/i.test(navigator.userAgent)) input.capture = "environment";
@@ -38,6 +39,7 @@ window.kameraAc = (i) => {
 };
 
 window.fotografEkle = async (i, input) => {
+  if (isMisafir()) { toast("Misafir foto yükleyemez", "warn"); return; }
   const dosyalar = Array.from(input.files || []);
   if (!dosyalar.length) return;
   const a = app.form.asamalar[i];
