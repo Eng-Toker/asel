@@ -1015,39 +1015,68 @@ async function aiRaporUret(env, { yorum, malzeme, fotolar, santiye, alan }) {
     `Raporun "technicalReferences" alanında kullanılan kaynak türünü açıkça belirt. ` +
     `Web kaynağı kullanıldıysa "KÖSTER resmi web sitesi" ifadesini geçir.`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`;
-
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SISTEM_PROMPT + sistemPromptEk }] },
-      contents: [{ role: 'user', parts }],
-      generationConfig: {
-        temperature: 0.3,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          required: [
-            'materialDescription', 'applicationSummary', 'fieldObservation',
-            'damageAnalysis', 'technicalReferences', 'conclusionText'
-          ],
-          properties: {
-            materialDescription: { type: 'string' },
-            applicationSummary:  { type: 'string' },
-            fieldObservation:    { type: 'string' },
-            damageAnalysis:      { type: 'string' },
-            technicalReferences: { type: 'string' },
-            conclusionText:      { type: 'string' },
-          },
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: SISTEM_PROMPT + sistemPromptEk }] },
+    contents: [{ role: 'user', parts }],
+    generationConfig: {
+      temperature: 0.3,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        required: [
+          'materialDescription', 'applicationSummary', 'fieldObservation',
+          'damageAnalysis', 'technicalReferences', 'conclusionText'
+        ],
+        properties: {
+          materialDescription: { type: 'string' },
+          applicationSummary:  { type: 'string' },
+          fieldObservation:    { type: 'string' },
+          damageAnalysis:      { type: 'string' },
+          technicalReferences: { type: 'string' },
+          conclusionText:      { type: 'string' },
         },
       },
-    }),
+    },
   });
 
+  // Retry + model fallback chain.
+  // 1. gemini-2.5-flash (preferred — en güncel, multimodal, hızlı)
+  // 2. gemini-2.5-flash retry (1.5s sonra — geçici overload geçmiş olabilir)
+  // 3. gemini-2.0-flash (genelde daha az yüklü, multimodal destekler)
+  // 4. gemini-1.5-flash (en stable, 2024'ten beri rock-solid)
+  // 503 "high demand" / 429 / 502 / 504 geçici hatalarda zincir ilerler.
+  // Permanent hatalar (4xx auth/invalid) tek seferde throw.
+  // Model chain — 2026 Q1 itibariyle aktif olanlar (1.5 ailesi retire edildi).
+  // Lite varyantlar daha az popüler → daha az 503 olasılığı; aynı multimodal
+  // destek (image input + JSON schema response) var.
+  const MODELS = [
+    'gemini-2.5-flash',         // preferred
+    'gemini-2.5-flash-lite',    // 2.5 lite (az popüler, hızlı)
+    'gemini-2.0-flash',         // 2.0 stable
+    'gemini-2.0-flash-lite',    // 2.0 lite (en az popüler)
+  ];
+  const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+  let r;
+  const errors = [];
+  for (let attempt = 0; attempt < MODELS.length; attempt++) {
+    if (attempt > 0) await new Promise((res) => setTimeout(res, 1500));
+    const model = MODELS[attempt];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+    r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: requestBody,
+    });
+    if (r.ok) break;
+    if (!RETRYABLE.has(r.status)) {
+      const errText = await r.text();
+      throw new Error(`AI sağlayıcı hatası ${model} ${r.status}: ${errText.slice(0, 400)}`);
+    }
+    errors.push(`${model}→${r.status}`);
+  }
+
   if (!r.ok) {
-    const errText = await r.text();
-    throw new Error(`AI sağlayıcı hatası ${r.status}: ${errText.slice(0, 500)}`);
+    throw new Error(`AI sağlayıcı tüm modeller unavailable [${errors.join(', ')}]`);
   }
 
   const data = await r.json();
@@ -1113,9 +1142,11 @@ async function pdfRaporYukle(env, { pdfBase64, santiye, alan, asama, dosyaAdi })
   };
 }
 
-// ─── P0-5 Auth: Supabase JWT verify (HS256) ──────────────────────────────────
-// env.SUPABASE_JWT_SECRET zorunlu (Cloudflare Worker secrets manager'da set edilmeli).
-// env.SUPABASE_URL ve env.SUPABASE_ANON_KEY /fotoIndir ownership check için (P0-7).
+// ─── P0-5 Auth: Supabase JWT verify (HS256 + ES256/RS256 asymmetric) ─────────
+// HS256 path: env.SUPABASE_JWT_SECRET (Legacy JWT Secret).
+// ES256/RS256 path: JWKS endpoint'inden public key fetch (Supabase 2025
+// "JWT Signing Keys" migration'ı sonrası user token'ları asymmetric signed).
+// env.SUPABASE_URL ve env.SUPABASE_ANON_KEY /fotoIndir ownership + JWKS fetch için.
 
 function b64urlDecode(s) {
   const norm = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
@@ -1147,10 +1178,81 @@ async function verifyJwt(token, secret) {
   }
 }
 
+// JWKS cache — module-level, 6h TTL (cold start'ta refresh).
+const _jwksCache = new Map();
+let _jwksFetchedAt = 0;
+const JWKS_TTL_MS = 6 * 3600 * 1000;
+
+async function _loadJwks(env, forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && _jwksCache.size > 0 && (now - _jwksFetchedAt) < JWKS_TTL_MS) return;
+  if (!env.SUPABASE_URL) throw new Error('SUPABASE_URL not set');
+  const r = await fetch(`${env.SUPABASE_URL}/auth/v1/.well-known/jwks.json`, {
+    headers: env.SUPABASE_ANON_KEY ? { apikey: env.SUPABASE_ANON_KEY } : {},
+  });
+  if (!r.ok) throw new Error(`JWKS fetch failed: ${r.status}`);
+  const { keys } = await r.json();
+  _jwksCache.clear();
+  for (const jwk of keys || []) {
+    const algo = jwk.kty === 'EC'
+      ? { name: 'ECDSA', namedCurve: jwk.crv }
+      : { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
+    try {
+      const key = await crypto.subtle.importKey('jwk', jwk, algo, false, ['verify']);
+      _jwksCache.set(jwk.kid, { key, kty: jwk.kty });
+    } catch { /* skip unsupported key */ }
+  }
+  _jwksFetchedAt = now;
+}
+
+async function verifyJwtAsymmetric(token, env) {
+  if (typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [h, p, s] = parts;
+  let header;
+  try { header = JSON.parse(new TextDecoder().decode(b64urlDecode(h))); }
+  catch { return null; }
+  if (!header.kid) return null;
+  try {
+    await _loadJwks(env);
+    let entry = _jwksCache.get(header.kid);
+    if (!entry) {
+      // kid rotation — refresh cache once
+      await _loadJwks(env, true);
+      entry = _jwksCache.get(header.kid);
+    }
+    if (!entry) return null;
+    const data = new TextEncoder().encode(`${h}.${p}`);
+    const sig = b64urlDecode(s);
+    const verifyParams = entry.kty === 'EC'
+      ? { name: 'ECDSA', hash: 'SHA-256' }
+      : { name: 'RSASSA-PKCS1-v1_5' };
+    const ok = await crypto.subtle.verify(verifyParams, entry.key, sig, data);
+    if (!ok) return null;
+    const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(p)));
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 async function requireAuth(request, env) {
   const auth = request.headers.get('Authorization') || '';
   if (!auth.startsWith('Bearer ')) return null;
-  const payload = await verifyJwt(auth.slice(7), env.SUPABASE_JWT_SECRET);
+  const token = auth.slice(7);
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  let header;
+  try { header = JSON.parse(new TextDecoder().decode(b64urlDecode(parts[0]))); }
+  catch { return null; }
+  let payload = null;
+  if (header.alg === 'HS256') {
+    payload = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
+  } else if (header.alg === 'ES256' || header.alg === 'RS256') {
+    payload = await verifyJwtAsymmetric(token, env);
+  }
   if (!payload || payload.role !== 'authenticated' || !payload.sub) return null;
   return payload;
 }
