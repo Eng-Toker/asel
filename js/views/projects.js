@@ -36,12 +36,7 @@ const WMO_DURUM = (c) => {
 
 let _havaTimer = null;
 
-async function havaCek(ad, lat, lon) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weathercode,windspeed_10m&wind_speed_unit=ms&timezone=auto`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error("Hava servisi hata: " + r.status);
-  const j = await r.json();
-  const c = j.current || {};
+function _havaApply(ad, c) {
   app.havaDurumu[ad] = {
     ikon: WMO_EMOJI(c.weathercode),
     durum: WMO_DURUM(c.weathercode),
@@ -50,6 +45,14 @@ async function havaCek(ad, lat, lon) {
     ruzgar: Math.round((c.windspeed_10m || 0) * 3.6),
     son: Date.now(),
   };
+}
+
+async function havaCek(ad, lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weathercode,windspeed_10m&wind_speed_unit=ms&timezone=auto`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("Hava servisi hata: " + r.status);
+  const j = await r.json();
+  _havaApply(ad, j.current || {});
 }
 
 function havaChipHTML(ad) {
@@ -138,7 +141,25 @@ export async function tumHavaYenile() {
     .filter((s) => typeof s === "object" && s.lat != null && s.lon != null)
     .map((s) => ({ ad: s.name, lat: Number(s.lat), lon: Number(s.lon) }));
   if (!konumlu.length) return;
-  await Promise.allSettled(konumlu.map((k) => havaCek(k.ad, k.lat, k.lon)));
+  // open-meteo batch: tek request'te N koordinat (latitude=a,b,c&longitude=x,y,z),
+  // response array'i sıralı dönüyor. 13+ santiye → 13 fetch yerine 1 fetch
+  // (free tier ~10 req/min/IP rate limit'i koruma).
+  const lats = konumlu.map((k) => k.lat).join(",");
+  const lons = konumlu.map((k) => k.lon).join(",");
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,relative_humidity_2m,weathercode,windspeed_10m&wind_speed_unit=ms&timezone=auto`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("Hava servisi hata: " + r.status);
+    const j = await r.json();
+    // Tek koordinatta j.current, çoklu'da [{current},{current},...]
+    const list = Array.isArray(j) ? j : [j];
+    konumlu.forEach((k, i) => {
+      const c = list[i]?.current;
+      if (c) _havaApply(k.ad, c);
+    });
+  } catch {
+    // Geçici servis hatası — sessiz geç (UX: ikon eksik kalır, kritik değil)
+  }
   if (app.aktifView === "projects") renderSantiyeler();
 }
 

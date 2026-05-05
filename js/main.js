@@ -31,12 +31,13 @@ import { havaTipKapat } from "./views/projects.js";
 import { lbKapat } from "./lightbox.js";
 
 // Inline onclick/oninput handler'larının erişmesi için window'a aç
-window.el           = el;
-window.app          = app;
-window.tabGec       = tabGec;
-window.renderDetay  = renderDetay;
-window.toggleClear  = toggleClear;
-window.clearAra     = clearAra;
+window.el                = el;
+window.app               = app;
+window.tabGec            = tabGec;
+window.renderDetay       = renderDetay;
+window.renderSantiyeler  = renderSantiyeler;
+window.toggleClear       = toggleClear;
+window.clearAra          = clearAra;
 
 // ── Render kayıtları (router'ın inline çağırması için) ────────────────────────
 registerRender("projects", renderSantiyeler);
