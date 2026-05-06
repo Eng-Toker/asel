@@ -923,3 +923,353 @@
 .bolge-indicator:hover {
   background: #d1fae5;
 }
+
+/* ── Harita bilgi paneli (Direction B — Status-strip) ───────────────── */
+#harita-wrap {
+  display: flex;
+  height: calc(100dvh - 200px);
+  min-height: 520px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card);
+}
+#harita-container { flex: 1; min-width: 0; background: #dde7ee; }
+
+.harita-info-panel {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  color: var(--text);
+  overflow: hidden;
+}
+/* Boşken panel komple gizli — sadece marker tıklanınca açılır */
+.harita-info-panel.is-empty { display: none; }
+
+/* Empty state */
+.harita-info-panel .hip-empty {
+  margin: auto;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.harita-info-panel .hip-empty-icon {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: #eff4ff;
+  color: var(--accent, #2563eb);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.harita-info-panel .hip-empty-title { font-weight: 600; color: var(--text); font-size: 13px; }
+.harita-info-panel .hip-empty-sub { font-size: 12px; color: var(--muted); max-width: 220px; }
+
+/* Header */
+.harita-info-panel .hip-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+.harita-info-panel .hip-eyebrow {
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.harita-info-panel .hip-eyebrow .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent, #2563eb);
+}
+.harita-info-panel .hip-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.015em;
+  line-height: 1.2;
+  padding-right: 28px;
+  color: var(--text);
+}
+.harita-info-panel .hip-coord {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+.harita-info-panel .hip-close {
+  position: absolute;
+  top: 10px; right: 10px;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+}
+.harita-info-panel .hip-close:hover { background: #f1f5f9; color: var(--text); }
+
+/* Weather chip row */
+.harita-info-panel .hip-weather {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #fbfcfd, var(--card));
+}
+.harita-info-panel .hip-weather-main {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 600; font-size: 14px; color: var(--text);
+}
+.harita-info-panel .hip-weather-main .ikon { font-size: 22px; line-height: 1; }
+.harita-info-panel .hip-weather-main .deg { font-variant-numeric: tabular-nums; }
+.harita-info-panel .hip-weather-main .durum { color: var(--muted); font-weight: 500; font-size: 12px; }
+.harita-info-panel .hip-weather-meta {
+  margin-left: auto;
+  display: flex; gap: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.harita-info-panel .hip-weather-meta span::before {
+  content: ""; display: inline-block; width: 1px; height: 10px;
+  background: var(--border); margin-right: 10px; vertical-align: middle;
+}
+.harita-info-panel .hip-weather-meta span:first-child::before { display: none; margin: 0; }
+
+/* Summary block */
+.harita-info-panel .hip-summary {
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.harita-info-panel .hip-summary-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 8px;
+}
+.harita-info-panel .hip-summary-stats {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.harita-info-panel .hip-summary-stats b { color: var(--text); font-weight: 600; }
+.harita-info-panel .hip-summary-pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.harita-info-panel .hip-bar {
+  height: 6px;
+  background: #eef0f3;
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+}
+.harita-info-panel .hip-bar > .seg {
+  height: 100%;
+  transition: width .35s cubic-bezier(.4,0,.2,1);
+}
+.harita-info-panel .hip-bar > .seg.done { background: #186a3b; }
+.harita-info-panel .hip-bar > .seg.prog { background: #d4a020; }
+
+/* Section header */
+.harita-info-panel .hip-section-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.harita-info-panel .hip-section-h .count {
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* Alanlar list (scrollable) */
+.harita-info-panel .hip-alanlar {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+.harita-info-panel .hip-empty-alan {
+  text-align: center;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 20px 12px;
+}
+
+/* Direction B — alan kartı + status-strip */
+.harita-info-panel .hip-alan-row {
+  padding: 12px 12px 10px;
+  margin: 4px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.harita-info-panel .hip-alan-row + .hip-alan-row { margin-top: 8px; }
+.harita-info-panel .hip-alan-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 9px;
+  gap: 8px;
+}
+.harita-info-panel .hip-alan-name {
+  font-weight: 600; font-size: 13px; color: var(--text);
+}
+.harita-info-panel .hip-alan-pct {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-weight: 600;
+}
+.harita-info-panel .hip-strip {
+  display: flex;
+  gap: 3px;
+  height: 24px;
+}
+.harita-info-panel .hip-strip .seg {
+  flex: 1;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  cursor: default;
+  user-select: none;
+  position: relative;
+  border: 1px solid transparent;
+  transition: transform .12s;
+}
+.harita-info-panel .hip-strip .seg:hover { transform: translateY(-1px); }
+.harita-info-panel .hip-strip .seg.done {
+  background: #186a3b; color: #fff; border-color: #186a3b;
+}
+.harita-info-panel .hip-strip .seg.progress {
+  background: #f5b800; color: #4d3500; border-color: #d99e00;
+}
+.harita-info-panel .hip-strip .seg.wait {
+  background: #f1f3f6; color: #5b6473; border-color: #dfe3ea;
+}
+.harita-info-panel .hip-strip .seg .ico { font-size: 11px; margin-right: 2px; }
+.harita-info-panel .hip-alan-foot {
+  margin-top: 6px;
+  display: flex; gap: 10px;
+  font-size: 10.5px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.harita-info-panel .hip-alan-foot .legend-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 2px;
+  vertical-align: middle; margin-right: 4px;
+}
+
+/* Buttons (sticky bottom) */
+.harita-info-panel .hip-buttons {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+  flex-shrink: 0;
+}
+.harita-info-panel .hip-btn {
+  flex: 1;
+  appearance: none;
+  font: inherit;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background .15s, border-color .15s, transform .05s;
+}
+.harita-info-panel .hip-btn:active { transform: translateY(1px); }
+.harita-info-panel .hip-btn-primary {
+  background: var(--text);
+  color: #fff;
+  border: 1px solid var(--text);
+}
+.harita-info-panel .hip-btn-primary:hover { background: #1e293b; }
+.harita-info-panel .hip-btn-ghost {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid #d1d5db;
+}
+.harita-info-panel .hip-btn-ghost:hover { background: #f8fafc; border-color: #94a3b8; }
+
+/* Tooltip (DOM API ile, lib gerek yok) */
+.hip-tip {
+  position: fixed;
+  z-index: 5000;
+  background: #0f172a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 9px;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px -4px rgba(15,23,42,.35);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity .12s, transform .12s;
+}
+.hip-tip.show { opacity: 1; transform: translateY(0); }
+
+/* Mobile — column layout, panel as bottom sheet */
+@media (max-width: 640px) {
+  #harita-wrap {
+    flex-direction: column;
+    height: calc(100dvh - 140px);
+    min-height: 0;
+  }
+  #harita-container { flex: 1 1 auto; min-height: 220px; }
+  .harita-info-panel {
+    width: 100%;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    flex: 0 0 auto;
+    max-height: 60vh;
+    box-shadow: 0 -8px 24px -12px rgba(15,23,42,.18);
+  }
+  .harita-info-panel::before {
+    content: "";
+    display: block;
+    width: 36px; height: 4px;
+    background: #d1d5db;
+    border-radius: 999px;
+    margin: 7px auto 2px;
+    flex-shrink: 0;
+  }
+  .harita-info-panel .hip-header { padding: 8px 14px 10px; }
+  .harita-info-panel .hip-title { font-size: 16px; }
+  .harita-info-panel .hip-weather { padding: 8px 14px; }
+  .harita-info-panel .hip-summary { padding: 10px 14px; }
+  .harita-info-panel .hip-section-h { padding: 10px 14px 4px; }
+  .harita-info-panel .hip-alanlar { padding: 0 6px 6px; }
+}

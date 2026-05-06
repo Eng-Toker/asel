@@ -31,6 +31,10 @@ const refresh = debounce(async () => {
     const { renderStok } = await import("./views/stok.js");
     renderStok();
   }
+  else if (app.aktifView === "harita") {
+    const { renderHarita } = await import("./views/harita.js");
+    renderHarita();
+  }
 }, 500);
 
 function _scheduleReconnect() {

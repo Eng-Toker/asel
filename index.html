@@ -1,4 +1,17 @@
 <!doctype html>
+<!--
+  ============================================================================
+  Şantiye İş Takip
+  © 2025-2026 Ali Deniz Toker. Tüm hakları saklıdır.
+  All rights reserved. Proprietary software.
+
+  Bu yazılımın kaynak kodu, tasarımı ve mimarisi şahsi mülkiyetimdir.
+  Yazılı izin olmaksızın kopyalanması, dağıtılması, değiştirilmesi,
+  ters mühendislik yapılması veya türev eser oluşturulması yasaktır.
+  Yazılım ASEL Engineering'e yalnızca süresiz "kullanım hakkı" çerçevesinde
+  bedelsiz sunulmuştur; mülkiyet devri yapılmamıştır.
+  ============================================================================
+-->
 <html lang="tr">
   <head>
     <base href="/" />
@@ -17,6 +30,8 @@
     />
     <meta name="apple-mobile-web-app-title" content="Şantiye Takip" />
     <meta name="description" content="Saha iş takip ve raporlama uygulaması" />
+    <meta name="author" content="Ali Deniz Toker" />
+    <meta name="copyright" content="© 2025-2026 Ali Deniz Toker. All rights reserved." />
     <link rel="manifest" href="/manifest.json" />
 
     <link rel="stylesheet" href="css/base.css" />
@@ -36,6 +51,19 @@
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
       integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+      defer
+    ></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
       defer
@@ -199,11 +227,15 @@
               title="Bölge değiştir"
             ></span>
             <span id="topbar-role" class="role-badge"></span>
+            <button class="btn btn-primary" id="btn-yeni-santiye" onclick="santiyeEkleSor()">
+              + Yeni Şantiye
+            </button>
             <button class="btn" onclick="tabGec('dashboard')">
               📊 Dashboard
             </button>
             <button class="btn" onclick="tabGec('log')">📋 Log</button>
             <button class="btn" onclick="tabGec('stok')">📦 Stok</button>
+            <button class="btn" onclick="tabGec('harita')">🗺️ Harita</button>
             <button class="btn" id="btn-ayarlar" onclick="tabGec('ayarlar')">
               ⚙ Ayarlar
             </button>
@@ -236,6 +268,7 @@
             ></span>
             <button class="mta-btn" onclick="hakkindaAc()" title="Hakkında">ℹ️</button>
             <button class="mta-btn" onclick="tabGec('stok')" title="Stok">📦</button>
+            <button class="mta-btn" onclick="tabGec('harita')" title="Harita">🗺️</button>
           </div>
         </div>
         <div class="search-box">
@@ -415,28 +448,55 @@
             <div class="page-title">Ayarlar</div>
           </div>
         </div>
-        <div class="section" style="max-width: 600px">
-          <div class="section-title">Şantiyeler</div>
+
+        <!-- Tab switcher -->
+        <div style="display:flex; gap:6px; margin: 0 0 12px; flex-wrap:wrap">
+          <button class="btn" id="tab-ayarlar-santiyeler" onclick="ayarlarTabDegistir('santiyeler')">🏗 Şantiyeler</button>
+          <button class="btn" id="tab-ayarlar-malzemeler" onclick="ayarlarTabDegistir('malzemeler')">📦 Malzemeler</button>
+          <button class="btn" id="tab-ayarlar-personel" onclick="ayarlarTabDegistir('personel')">👷 Personel</button>
+        </div>
+
+        <div id="ayarlar-santiyeler-content" class="hidden" style="max-width: 600px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+            Ad düzenle, sırala (↑↓), sil. Yeni şantiye eklemek için ana ekrandaki <b>+</b> butonunu kullanın.
+          </div>
           <div
             id="ayarlar-santiye-list"
             style="display: grid; gap: 8px; margin-bottom: 12px"
           ></div>
-          <div style="display: flex; gap: 8px">
-            <input
-              class="form-input"
-              id="ayarlar-santiye-input"
-              placeholder="Yeni şantiye adı..."
-              style="flex: 1"
-            />
-            <button class="btn btn-primary" onclick="santiyeEkle()">
-              + Ekle
-            </button>
-          </div>
           <div
             class="status err"
             id="ayarlar-status"
             style="margin-top: 8px"
           ></div>
+        </div>
+
+        <div id="ayarlar-malzemeler-content" class="hidden" style="max-width: 700px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+            Malzeme adlarını ve birimlerini ekle, düzenle, sırala, sil. Liste tüm bölgelere ortaktır.
+          </div>
+          <datalist id="ayarlar-birim-onerileri">
+            <option value="kg"><option value="lt"><option value="Adet"><option value="Kova"><option value="Paket"><option value="Rulo"><option value="Torba"><option value="Çuval"><option value="Koli"><option value="m"><option value="m2"><option value="m3">
+          </datalist>
+          <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap">
+            <input class="form-input" id="malzeme-yeni-ad" placeholder="Yeni malzeme adı..." style="flex:2; min-width:160px"
+              onkeydown="if(event.key==='Enter') malzemeEkle()">
+            <input class="form-input" id="malzeme-yeni-birim" list="ayarlar-birim-onerileri" placeholder="Birim..." style="flex:1; min-width:90px"
+              onkeydown="if(event.key==='Enter') malzemeEkle()">
+            <button class="btn btn-primary" onclick="malzemeEkle()">+ Ekle</button>
+          </div>
+          <div id="ayarlar-malzeme-list" style="display:grid; gap:8px"></div>
+        </div>
+
+        <div id="ayarlar-personel-content" class="hidden" style="max-width: 600px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+            Personel adlarını ekle, düzenle, sırala, sil. Liste seçili bölgeye özeldir.
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:12px">
+            <input class="form-input" id="personel-yeni-input" placeholder="Yeni personel adı..." style="flex:1" onkeydown="if(event.key==='Enter') personelEkle()">
+            <button class="btn btn-primary" onclick="personelEkle()">+ Ekle</button>
+          </div>
+          <div id="ayarlar-personel-list" style="display:grid; gap:8px"></div>
         </div>
       </section>
 
@@ -614,6 +674,21 @@
           </div>
         </div>
       </section>
+
+      <section id="view-harita" class="hidden">
+        <div class="topbar">
+          <div>
+            <button class="back-btn" id="btn-harita-back">← Geri dön</button>
+            <div class="eyebrow">Konumlar</div>
+            <div class="page-title" id="harita-baslik">Şantiye Konumları</div>
+          </div>
+        </div>
+        <div id="harita-wrap">
+          <aside id="harita-info-panel" class="harita-info-panel is-empty" aria-label="Şantiye detay paneli"></aside>
+          <div id="harita-container"></div>
+        </div>
+        <div id="harita-bilgi" style="margin-top: 12px"></div>
+      </section>
     </div>
 
     <!-- Mobile bottom nav -->
@@ -647,6 +722,17 @@
       id="fab-add"
       onclick="yeniKayitAc()"
       title="Uygulama Alanı Ekle"
+      style="display: none"
+    >
+      +
+    </button>
+
+    <!-- FAB (yeni şantiye, ana ekranda) -->
+    <button
+      class="fab"
+      id="fab-santiye-ekle"
+      onclick="santiyeEkleSor()"
+      title="Yeni Şantiye Ekle"
       style="display: none"
     >
       +
@@ -766,7 +852,7 @@
           Şantiye İş Takip
         </div>
         <div style="font-size: 12px; color: var(--muted); margin-bottom: 20px">
-          ASEL Engineering · v1.2
+          ASEL Engineering · v1.3
         </div>
 
         <div
@@ -815,7 +901,16 @@
           </div>
           <div>
             🌤 <b>Hava Durumu</b> — Şantiye bazlı konum kaydı, canlı hava
-            verisi, 30 dakikada bir otomatik güncelleme
+            verisi, manuel not (örn. "öğleden sonra yağmur") + 30 dakikada bir
+            otomatik güncelleme
+          </div>
+          <div>
+            🗺️ <b>Harita</b> — Tüm şantiyelerin konumunu tek ekranda gör, yan
+            panelde alan/aşama özeti, yol tarifi al
+          </div>
+          <div>
+            📦 <b>Stok Yönetimi</b> — Envanter, depo–saha takibi, hareket
+            geçmişi, Excel/PDF export
           </div>
           <div>
             📊 <b>Dashboard</b> — Genel ilerleme, durum dağılımı, şantiye bazlı
@@ -824,6 +919,10 @@
           <div>
             📝 <b>Log Sistemi</b> — Her değişikliğin otomatik kaydı, Excel/PDF
             export
+          </div>
+          <div>
+            ⚙ <b>Ayarlar Yönetimi</b> — Şantiye / malzeme / personel ekle,
+            düzenle, sırala, sil
           </div>
           <div>
             🔄 <b>Gerçek Zamanlı Senkronizasyon</b> — Başka cihazdan yapılan
@@ -863,6 +962,10 @@
             rapor oluşturma
           </div>
           <div>
+            🔧 <b>Aletler</b> — Saha aletlerinin (karıştırıcı, hilti vb.)
+            durum takibi (çalışıyor / bozuk)
+          </div>
+          <div>
             📈 <b>Performans Analizi</b> — Personel bazlı verimlilik, alan bazlı
             ilerleme grafikleri
           </div>
@@ -900,9 +1003,15 @@
             text-align: center;
             font-size: 11px;
             color: var(--muted);
+            line-height: 1.6;
           "
         >
-          Geliştirici: Ali Deniz Toker · ASEL Engineering · 2025–2026
+          <div><b>Geliştirici · Telif sahibi:</b> Ali Deniz Toker</div>
+          <div>© 2025–2026 · Tüm hakları saklıdır</div>
+          <div style="margin-top:4px; font-size:10px; opacity:.85">
+            ASEL Engineering'e bedelsiz "kullanım hakkı" sunulmuştur.<br>
+            Yazılımın kaynak kodu, tasarımı ve mimarisi kişisel mülkiyettir.
+          </div>
         </div>
       </div>
     </div>

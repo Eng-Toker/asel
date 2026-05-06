@@ -12,19 +12,22 @@ let _isMisafir = () => false;
 export function setIsMisafir(fn) { _isMisafir = fn; }
 
 export function tabGec(view, pushHistory = true) {
-  ["view-projects", "view-detail", "view-log", "view-ayarlar", "view-dashboard", "view-stok"]
+  ["view-projects", "view-detail", "view-log", "view-ayarlar", "view-dashboard", "view-stok", "view-harita"]
     .forEach((id) => el(id)?.classList.add("hidden"));
   app.aktifView = view;
   const bolgeTag = app.bolge ? ` [${app.bolge}]` : "";
   const btnNewRecord = el("btn-new-record");
   const fab = el("fab-add");
+  const fabSan = el("fab-santiye-ekle");
   if (fab) fab.style.display = "";
+  if (fabSan) fabSan.style.display = "none"; // default gizle, sadece projects + admin gösterir
 
   if (view === "projects") {
     el("view-projects").classList.remove("hidden");
     document.title = "Şantiye İş Takip" + bolgeTag;
     if (pushHistory) history.pushState({ view }, "", "/");
     if (fab) fab.style.display = "none";
+    if (fabSan) fabSan.style.display = _isMisafir() ? "none" : "";
   } else if (view === "detail") {
     el("view-detail").classList.remove("hidden");
     const ad = app.secilenSantiye || "";
@@ -55,6 +58,12 @@ export function tabGec(view, pushHistory = true) {
     document.title = "Stok | Şantiye Takip" + bolgeTag;
     if (pushHistory) history.pushState({ view }, "", "/stok");
     _renders.stok?.();
+    if (fab) fab.style.display = "none";
+  } else if (view === "harita") {
+    el("view-harita").classList.remove("hidden");
+    document.title = "Harita | Şantiye Takip" + bolgeTag;
+    if (pushHistory) history.pushState({ view }, "", "/harita");
+    _renders.harita?.();
     if (fab) fab.style.display = "none";
   }
 
@@ -103,5 +112,7 @@ window.addEventListener("popstate", async (e) => {
     tabGec("dashboard", false);
   } else if (state.view === "stok") {
     tabGec("stok", false);
+  } else if (state.view === "harita") {
+    tabGec("harita", false);
   }
 });

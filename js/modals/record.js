@@ -12,7 +12,7 @@ import { renderSantiyeler } from "../views/projects.js";
 // ── Form yardımcıları ─────────────────────────────────────────────────────────
 
 function bosAsama(sira) {
-  return { sira, malzeme: "", not: "", metraj: "", durum: "Beklemede", personeller: [], fotograflar: [], yeniFotolar: [], silinecek: [], acik: sira <= 3 };
+  return { sira, malzeme: "", not: "", metraj: "", durum: "Beklemede", personeller: [], fotograflar: [], yeniFotolar: [], silinecek: [], acik: false };
 }
 
 function bosForm() {
@@ -356,7 +356,7 @@ window.kayitDuzenle = (id) => {
     uygulamaAlani: rec.uygulamaAlani,
     asamaSayisi: rec.asamalar?.length || 1,
     asamalar: (rec.asamalar || [{ ...bosAsama(1) }]).map((a, i) => ({
-      ...a, fotograflar: [...(a.fotograflar || [])], yeniFotolar: [], silinecek: [], personeller: [...(a.personeller || [])], acik: i < 3,
+      ...a, fotograflar: [...(a.fotograflar || [])], yeniFotolar: [], silinecek: [], personeller: [...(a.personeller || [])], acik: false,
     })),
   };
   el("modal-title").textContent = "Uygulama Alanını Düzenle";

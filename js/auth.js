@@ -56,6 +56,13 @@ export function rolGoster() {
   });
   const ayarlarBtn = el("btn-ayarlar");
   if (ayarlarBtn) ayarlarBtn.style.display = o.rol === "guest" ? "none" : "";
+  // "+ Yeni Şantiye" — PC: topbar buton; Mobil: sağ alt FAB. Misafire gizli.
+  const yeniSan = el("btn-yeni-santiye");
+  if (yeniSan) yeniSan.style.display = o.rol === "guest" ? "none" : "";
+  const fabSan = el("fab-santiye-ekle");
+  // FAB sadece projects view'da görünür; tabGec yönetiyor. Burada misafir → kesin gizli.
+  if (fabSan && o.rol === "guest") fabSan.style.display = "none";
+  if (fabSan && o.rol !== "guest" && app.aktifView === "projects") fabSan.style.display = "";
   const hint    = el("notlar-tikla-hint");
   const notCard = el("stat-notlar-card");
   if (hint)    hint.textContent       = o.rol === "guest" ? "" : "● Tıkla";

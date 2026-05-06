@@ -1,3 +1,16 @@
+/*!
+ * Şantiye İş Takip
+ * Copyright © 2025-2026 Ali Deniz Toker. Tüm hakları saklıdır. All rights reserved.
+ *
+ * PROPRIETARY SOFTWARE — bu yazılımın kaynak kodu kişisel mülkiyettir.
+ * Yazılı izin olmaksızın kopyalanması, çoğaltılması, dağıtılması veya türev
+ * eser oluşturulması yasaktır. ASEL Engineering'e yalnızca bedelsiz kullanım
+ * hakkı (license to use) verilmiştir; mülkiyet devri yapılmamıştır.
+ *
+ * Detaylı lisans: bkz. LICENSE
+ * İletişim: eng.adtoker@gmail.com
+ */
+
 // main.js — Uygulama giriş noktası
 
 import "./config.js";
@@ -17,6 +30,7 @@ import "./views/log.js";
 import "./views/ayarlar.js";
 import "./views/dashboard.js";
 import "./views/stok.js";
+import "./views/harita.js";
 import "./modals/record.js";
 import "./modals/note.js";
 import "./modals/rapor.js";
@@ -59,6 +73,11 @@ el("btn-log-back").addEventListener("click", () => {
 });
 
 el("btn-stok-back")?.addEventListener("click", () => {
+  if (app.secilenSantiye) { tabGec("detail"); renderDetay(); }
+  else                    { tabGec("projects"); renderSantiyeler(); }
+});
+
+el("btn-harita-back")?.addEventListener("click", () => {
   if (app.secilenSantiye) { tabGec("detail"); renderDetay(); }
   else                    { tabGec("projects"); renderSantiyeler(); }
 });

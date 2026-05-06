@@ -79,6 +79,8 @@ function havaChipHTML(ad) {
     const ttl = m.not ? esc("Manuel: " + m.not) : "";
     return `<span class="hava-chip" data-santiye="${esc(ad)}" title="${ttl}" onclick="event.stopPropagation();havaTipToggle(this)">${h.ikon}</span>`;
   }
+  // Konum yoksa 📍 ekleme butonu sadece admin'e gösterilir.
+  if (isMisafir()) return "";
   return `<span class="hava-chip btn-gps" title="Konum belirle ve hava durumunu göster" onclick="event.stopPropagation();havaKonumAl('${esc(ad)}',this)">📍</span>`;
 }
 
@@ -267,6 +269,7 @@ window.addEventListener("resize", havaTipReposition);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") havaTipKapat(); });
 
 window.havaKonumAl = async (ad, btn) => {
+  if (isMisafir()) { toast("Misafir konum kaydedemez", "warn"); return; }
   if (!navigator.geolocation) { toast("Bu cihazda konum servisi yok", "warn"); return; }
   if (!isAdmin()) { toast("Konum kaydı için admin girişi gerekli", "warn"); return; }
   if (btn) { btn.classList.add("loading"); btn.textContent = "⏳"; }
@@ -282,6 +285,9 @@ window.havaKonumAl = async (ad, btn) => {
     await havaCek(ad, lat, lon);
     toast(`"${ad}" konumu kaydedildi`, "ok", 2000);
     renderSantiyeler();
+    if (app.aktifView === "ayarlar") {
+      import("./ayarlar.js").then(({ renderAyarlar }) => renderAyarlar());
+    }
   } catch (e) {
     if (btn) { btn.classList.remove("loading"); btn.textContent = "📍"; }
     const msg = e.code === 1 ? "Konum izni reddedildi" : e.code === 2 ? "Konum alınamadı" : e.code === 3 ? "Zaman aşımı" : e.message || "Hata";
@@ -329,11 +335,7 @@ export function stopHavaTimer() {
 // ── Render: Şantiyeler ────────────────────────────────────────────────────────
 
 export function renderSantiyeler() {
-  el("view-projects").classList.toggle("hidden", !!app.secilenSantiye);
-  el("view-detail").classList.toggle("hidden", !app.secilenSantiye);
-  const fab = el("fab-add");
-  if (fab && !app.secilenSantiye) fab.style.display = "none";
-
+  // View görünürlüğü tabGec (router) sorumluluğu; burada içerik doldur.
   const aramaMetni = (app.filtre.santiyeAra || "").toLowerCase();
   const filtered = app.santiyeler.filter((s) => {
     const ad = typeof s === "object" ? s.name : s;

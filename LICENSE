@@ -1,0 +1,85 @@
+PROPRIETARY SOFTWARE LICENSE
+============================
+
+Şantiye İş Takip
+Copyright © 2025-2026 Ali Deniz Toker. Tüm hakları saklıdır.
+All rights reserved.
+
+──────────────────────────────────────────────────────────────────────────────
+
+1. SAHİPLİK / OWNERSHIP
+
+Bu yazılımın kaynak kodu, tasarımı, mimarisi, veritabanı şeması, kullanıcı
+arayüzü, dokümantasyonu ve ilgili tüm fikri mülkiyet hakları yalnızca
+Ali Deniz Toker'e aittir. Yazılım, herhangi bir işveren veya üçüncü tarafın
+"iş gereği talimatı" ile geliştirilmemiştir; tamamen yazarın kişisel
+zamanında, kendi cihaz ve hesaplarında geliştirilmiştir.
+
+The source code, design, architecture, database schema, user interface,
+documentation, and all related intellectual property rights of this software
+belong exclusively to Ali Deniz Toker. The software was NOT developed under
+employer instruction or work scope; it was developed entirely on the author's
+personal time, equipment, and accounts.
+
+──────────────────────────────────────────────────────────────────────────────
+
+2. KULLANIM İZNİ / USAGE GRANT
+
+ASEL Engineering şirketine, yazılımı saha operasyonlarında kullanmak üzere
+bedelsiz, devredilemez ve geri çağrılabilir bir "kullanım hakkı" (license to
+use) verilmiştir. Bu hak:
+
+  - Mülkiyet devri DEĞİLDİR.
+  - Kaynak koduna erişim hakkı VERMEZ.
+  - Üçüncü taraflara devredilemez.
+  - Yazar tarafından 30 gün önceden bildirim ile geri alınabilir.
+
+──────────────────────────────────────────────────────────────────────────────
+
+3. YASAK FİİLLER / PROHIBITED ACTIONS
+
+Yazarın yazılı izni olmaksızın aşağıdakiler kesinlikle yasaktır:
+
+  - Kaynak kodun kopyalanması veya çoğaltılması
+  - Yazılımın tersine mühendisliğe tabi tutulması
+  - Türev eserler oluşturulması
+  - Yazılımın satılması, kiralanması veya dağıtılması
+  - Markanın kaldırılması veya değiştirilmesi
+  - Kaynak kodun kamuya açık veya başka bir özel havuza yüklenmesi
+
+The following are strictly prohibited without written permission of the author:
+
+  - Copying or reproducing the source code
+  - Reverse engineering the software
+  - Creating derivative works
+  - Selling, leasing, or distributing the software
+  - Removing or altering attribution
+  - Uploading source code to public or any other private repositories
+
+──────────────────────────────────────────────────────────────────────────────
+
+4. SORUMLULUK REDDİ / WARRANTY DISCLAIMER
+
+Yazılım "OLDUĞU GİBİ" sunulmuştur. Yazar, yazılımın kullanımından
+kaynaklanan hiçbir doğrudan veya dolaylı zarardan sorumlu tutulamaz.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+──────────────────────────────────────────────────────────────────────────────
+
+5. UYGULANACAK HUKUK / GOVERNING LAW
+
+Bu lisans Kuzey Kıbrıs Türk Cumhuriyeti (KKTC) Fikri Mülkiyet ve Telif
+Hakları mevzuatına ve ilgili uluslararası anlaşmalara tabidir.
+
+This license is governed by the Intellectual Property and Copyright laws
+of the Turkish Republic of Northern Cyprus (TRNC) and applicable
+international treaties.
+
+──────────────────────────────────────────────────────────────────────────────
+
+İletişim · Contact:
+Ali Deniz Toker
+eng.adtoker@gmail.com

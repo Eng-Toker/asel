@@ -11,7 +11,7 @@ export async function veriYukle({ sessiz = false } = {}) {
   try {
     const [sD, pD, mD] = await Promise.all([
       dbGet("santiyeler", `select=id,name,lat,lon,hava_manuel_not,hava_manuel_son&active=eq.true&order=sort_order,name${bolgeFiltre}`).catch(() => null),
-      dbGet("personeller", `select=name&active=eq.true&order=sort_order,name${bolgeFiltre}`).catch(() => null),
+      dbGet("personeller", `select=id,name&active=eq.true&order=sort_order,name${bolgeFiltre}`).catch(() => null),
       dbGet("malzemeler",  "select=id,name,birim&active=eq.true&order=sort_order,name").catch(() => null),
     ]);
     if (sD?.length) app.santiyeler = sD.map((x) => ({
@@ -19,8 +19,13 @@ export async function veriYukle({ sessiz = false } = {}) {
       hava_manuel_not: x.hava_manuel_not, hava_manuel_son: x.hava_manuel_son,
     }));
     else if (sD) app.santiyeler = [];
-    if (pD?.length) app.personeller = pD.map((x) => x.name);
-    else if (pD) app.personeller = [];
+    if (pD?.length) {
+      app.personeller = pD.map((x) => x.name);   // record modal'da kullanılan string array
+      app.personellerFull = pD;                   // ayarlar CRUD için {id, name}
+    } else if (pD) {
+      app.personeller = [];
+      app.personellerFull = [];
+    }
     if (mD?.length) {
       app.malzemeler = mD.map((x) => x.name);
       app.malzemelerFull = mD;
@@ -123,7 +128,7 @@ export function mkAsama(src, sira) {
     fotograflar: [],
     yeniFotolar: [],
     silinecek: [],
-    acik: sira <= 3,
+    acik: false,
     createdAt: null,
   };
 }
