@@ -54,3 +54,7 @@ coverage/
 # Sadece .claude/ ve MIMARI.md git'ten dışlanır, diğerleri repo dökümanları.
 .claude/
 MIMARI.md
+
+# Kişisel notlar (audit, handoff, session, manual tasks, vs.)
+# Bu klasör sadece yerel — git'e VE Cloudflare deploy'una gitmez.
+notlar/
