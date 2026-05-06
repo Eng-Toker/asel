@@ -27,6 +27,10 @@ const refresh = debounce(async () => {
   else if (app.aktifView === "detail" && app.secilenSantiye) renderDetay();
   else if (app.aktifView === "log") renderLog();
   else if (app.aktifView === "dashboard") renderDashboard();
+  else if (app.aktifView === "stok") {
+    const { renderStok } = await import("./views/stok.js");
+    renderStok();
+  }
 }, 500);
 
 function _scheduleReconnect() {
@@ -67,7 +71,7 @@ export function realtimeBaslat() {
   // bolge sütunu olan tablolar → server-side filter ile sadece kendi
   // bölgesinin event'leri gelir. Child tablolarda bolge yok, refresh
   // debounce'ı zaten veriYukle'yi bolge filtreli çağırıyor.
-  const TOPICS_WITH_BOLGE = ["santiye_records", "santiyeler", "santiye_log", "santiye_notlar"];
+  const TOPICS_WITH_BOLGE = ["santiye_records", "santiyeler", "santiye_log", "santiye_notlar", "malzeme_stok", "stok_hareket"];
   const TOPICS_NO_BOLGE   = ["record_asamalar", "record_fotograflar"];
   const bolgeSuffix = app.bolge ? `:bolge=eq.${encodeURIComponent(app.bolge)}` : "";
 

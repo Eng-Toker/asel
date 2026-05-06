@@ -142,6 +142,17 @@
   .modal {
     max-height: 100vh;
   }
+
+  /* Mobil topbar ikon butonları (Stok kısayolu) */
+  .mta-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    line-height: 1;
+    padding: 6px 4px;
+    cursor: pointer;
+    color: var(--muted);
+  }
 }
 
 @media (min-width: 641px) {

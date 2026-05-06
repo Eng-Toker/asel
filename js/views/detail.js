@@ -8,7 +8,7 @@ export function renderDetay() {
   if (!app.secilenSantiye) return;
   const tumKayitlar = app.kayitlar.filter((r) => r.santiye === app.secilenSantiye);
 
-  el("detail-title").textContent = app.secilenSantiye;
+  el("detail-title").innerHTML = `${esc(app.secilenSantiye)}<button class="title-stok-btn" onclick="stokSantiyeAc('${esc(app.secilenSantiye)}')" title="Bu şantiyeye gönderilen malzemeler" aria-label="Malzeme">📦</button>`;
   const tumAsamalar = tumKayitlar.flatMap((r) => r.asamalar || []);
   const alanSayisi = tumKayitlar.length;
   const tamAlan = tumKayitlar.filter((r) => (r.asamalar || []).length && (r.asamalar || []).every((a) => a.durum === "Tamamlandı")).length;

@@ -16,9 +16,11 @@ import "./views/detail.js";
 import "./views/log.js";
 import "./views/ayarlar.js";
 import "./views/dashboard.js";
+import "./views/stok.js";
 import "./modals/record.js";
 import "./modals/note.js";
 import "./modals/rapor.js";
+import "./modals/stok-santiye.js";
 
 import { el, toggleClear, clearAra } from "./utils.js";
 import { app } from "./state.js";
@@ -56,6 +58,11 @@ el("btn-log-back").addEventListener("click", () => {
   else                    { tabGec("projects"); renderSantiyeler(); }
 });
 
+el("btn-stok-back")?.addEventListener("click", () => {
+  if (app.secilenSantiye) { tabGec("detail"); renderDetay(); }
+  else                    { tabGec("projects"); renderSantiyeler(); }
+});
+
 el("btn-log-yenile").addEventListener("click", async () => {
   await veriYukle();
   renderLog();
@@ -75,6 +82,7 @@ document.addEventListener("keydown", (e) => {
     if (el("modal-overlay").classList.contains("open"))     window.modalKapat();
     if (el("not-modal-overlay").classList.contains("open")) window.notModalKapat();
     if (el("rapor-modal")?.classList.contains("open"))      window.raporModalKapat();
+    if (el("stok-santiye-modal-overlay")?.classList.contains("open")) window.stokSantiyeKapat?.();
     lbKapat();
     havaTipKapat();
   }

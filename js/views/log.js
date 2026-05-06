@@ -1,4 +1,5 @@
-// views/log.js — Log tablosu ve filtreleme
+// views/log.js — Saha takip log tablosu (santiye_log).
+// Stok hareketleri için: views/stok.js → "Hareket Geçmişi" tab'ı.
 
 import { app } from "../state.js";
 import { el, esc, badgeCls } from "../utils.js";
@@ -6,14 +7,15 @@ import { registerRender } from "../router.js";
 import { piiPrefetch, piiGoster } from "../pii-helpers.js";
 
 export function renderLog() {
-  const logSantiyeEl = el("log-filter-santiye");
-  const mevcutDeger = logSantiyeEl.value;
-  logSantiyeEl.innerHTML =
-    '<option value="">Tüm Şantiyeler</option>' +
-    app.santiyeler.map((s) => {
-      const ad = typeof s === "object" ? s.name : s;
-      return `<option ${ad === mevcutDeger ? "selected" : ""}>${esc(ad)}</option>`;
-    }).join("");
+  const filterEl = el("log-filter-santiye");
+  if (filterEl) {
+    const mevcut = filterEl.value;
+    filterEl.innerHTML = '<option value="">Tüm Şantiyeler</option>' +
+      app.santiyeler.map((s) => {
+        const ad = typeof s === "object" ? s.name : s;
+        return `<option ${ad === mevcut ? "selected" : ""}>${esc(ad)}</option>`;
+      }).join("");
+  }
   window.logFiltrele();
 }
 

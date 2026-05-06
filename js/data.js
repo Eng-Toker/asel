@@ -10,15 +10,23 @@ export async function veriYukle({ sessiz = false } = {}) {
   const bolgeFiltre = app.bolge ? `&bolge=eq.${encodeURIComponent(app.bolge)}` : "";
   try {
     const [sD, pD, mD] = await Promise.all([
-      dbGet("santiyeler", `select=id,name,lat,lon&active=eq.true&order=sort_order,name${bolgeFiltre}`).catch(() => null),
+      dbGet("santiyeler", `select=id,name,lat,lon,hava_manuel_not,hava_manuel_son&active=eq.true&order=sort_order,name${bolgeFiltre}`).catch(() => null),
       dbGet("personeller", `select=name&active=eq.true&order=sort_order,name${bolgeFiltre}`).catch(() => null),
-      dbGet("malzemeler",  "select=name&active=eq.true&order=sort_order,name").catch(() => null),
+      dbGet("malzemeler",  "select=id,name,birim&active=eq.true&order=sort_order,name").catch(() => null),
     ]);
-    if (sD?.length) app.santiyeler = sD.map((x) => ({ id: x.id, name: x.name, lat: x.lat, lon: x.lon }));
+    if (sD?.length) app.santiyeler = sD.map((x) => ({
+      id: x.id, name: x.name, lat: x.lat, lon: x.lon,
+      hava_manuel_not: x.hava_manuel_not, hava_manuel_son: x.hava_manuel_son,
+    }));
     else if (sD) app.santiyeler = [];
     if (pD?.length) app.personeller = pD.map((x) => x.name);
     else if (pD) app.personeller = [];
-    if (mD?.length) app.malzemeler = mD.map((x) => x.name);
+    if (mD?.length) {
+      app.malzemeler = mD.map((x) => x.name);
+      app.malzemelerFull = mD;
+    } else if (mD) {
+      app.malzemelerFull = [];
+    }
 
     const recFilter = app.bolge ? `&bolge=eq.${encodeURIComponent(app.bolge)}` : "";
     const [rD, aD, fD] = await Promise.all([
@@ -45,6 +53,18 @@ export async function veriYukle({ sessiz = false } = {}) {
       personeller: Array.isArray(s.personeller) ? s.personeller : [],
       duzenleyen: s.duzenleyen || "—",
     }));
+
+    const stokFilter = app.bolge ? `&bolge=eq.${encodeURIComponent(app.bolge)}` : "";
+    const [msD, shD] = await Promise.all([
+      dbGet("malzeme_stok",
+        `select=id,malzeme_id,bolge,mevcut_stok,updated_at,malzemeler(id,name,birim)&order=updated_at.desc${stokFilter}`
+      ).catch(() => []),
+      dbGet("stok_hareket",
+        `select=*,malzemeler(name,birim)&order=created_at.desc&limit=200${stokFilter}`
+      ).catch(() => []),
+    ]);
+    app.stok = msD;
+    app.stokHareket = shD;
   } catch (err) {
     console.error(err);
     if (!sessiz) {

@@ -45,6 +45,23 @@ function _havaApply(ad, c) {
     ruzgar: Math.round((c.windspeed_10m || 0) * 3.6),
     son: Date.now(),
   };
+  // Manuel not santiyeler tablosunda; havaDurumu sadece otomatik veriler.
+}
+
+// Manuel not + zaman damgası: santiyeler tablosundan oku
+function _havaManuelOku(ad) {
+  const sObj = app.santiyeler.find((s) => (typeof s === "object" ? s.name : s) === ad);
+  if (!sObj || typeof sObj !== "object") return { not: null, son: null };
+  return { not: sObj.hava_manuel_not || null, son: sObj.hava_manuel_son || null };
+}
+
+function _havaManuelSonFmt(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const ayniGun = d.toDateString() === new Date().toDateString();
+  if (ayniGun) return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString("tr-TR") + " " + d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
 }
 
 async function havaCek(ad, lat, lon) {
@@ -58,34 +75,82 @@ async function havaCek(ad, lat, lon) {
 function havaChipHTML(ad) {
   const h = app.havaDurumu[ad];
   if (h) {
-    return `<span class="hava-chip" data-santiye="${esc(ad)}" data-hava='${esc(JSON.stringify(h))}' onclick="event.stopPropagation();havaTipToggle(this)">${h.ikon}</span>`;
+    const m = _havaManuelOku(ad);
+    const ttl = m.not ? esc("Manuel: " + m.not) : "";
+    return `<span class="hava-chip" data-santiye="${esc(ad)}" title="${ttl}" onclick="event.stopPropagation();havaTipToggle(this)">${h.ikon}</span>`;
   }
   return `<span class="hava-chip btn-gps" title="Konum belirle ve hava durumunu göster" onclick="event.stopPropagation();havaKonumAl('${esc(ad)}',this)">📍</span>`;
 }
 
-let _havaTipEl = null;
+let _havaTipEl  = null;
+let _manuelEdit = null;  // tooltip'te manuel düzenleme açık olan şantiye adı
 
 export function havaTipKapat() {
   if (_havaTipEl) { _havaTipEl.remove(); _havaTipEl = null; }
+  _manuelEdit = null;
 }
 
-window.havaTipToggle = (chip) => {
-  if (_havaTipEl && _havaTipEl._chip === chip) { havaTipKapat(); return; }
-  havaTipKapat();
-  let h;
-  try { h = JSON.parse(chip.getAttribute("data-hava") || "{}"); } catch { return; }
-  if (!h.durum) return;
-  const tip = document.createElement("div");
-  tip.className = "hava-tip";
-  tip.innerHTML = `
+function havaTipIcerikHTML(ad) {
+  const h = app.havaDurumu[ad];
+  if (!h || !h.durum) return "";
+
+  let html = `
     <div class="hava-tip-head">${esc(h.durum)}</div>
     <div class="hava-tip-row"><span>Sıcaklık</span><b>${h.sicaklik}°C</b></div>
     <div class="hava-tip-row"><span>Nem</span><b>%${h.nem}</b></div>
     <div class="hava-tip-row"><span>Rüzgar</span><b>${h.ruzgar} km/h</b></div>
   `;
-  document.body.appendChild(tip);
+
+  const m = _havaManuelOku(ad);
+  const baslikHtml = `<div style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px">Manuel</div>`;
+  const ayraciAc   = `<div style="border-top:1px dashed var(--border); margin-top:8px; padding-top:8px">`;
+
+  if (_manuelEdit === ad && !isMisafir()) {
+    const v = m.not || "";
+    html += ayraciAc + baslikHtml +
+      `<input id="hava-manuel-input" class="form-input" value="${esc(v)}"
+         placeholder="örn: Yağmur yağdı, fırtına vs."
+         style="height:30px;font-size:13px;width:100%"
+         onkeydown="if(event.key==='Enter'){havaManuelKaydet('${esc(ad)}')}else if(event.key==='Escape'){event.stopPropagation();havaManuelIptal()}">
+       <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">
+         <button class="btn btn-sm" onclick="havaManuelIptal()">İptal</button>
+         <button class="btn btn-primary btn-sm" onclick="havaManuelKaydet('${esc(ad)}')">Kaydet</button>
+       </div>
+      </div>`;
+  } else if (m.not) {
+    const aksiyon = isMisafir()
+      ? ""
+      : `<button onclick="havaManuelDuzenleAc('${esc(ad)}')" title="Düzenle"
+           style="background:none;border:none;cursor:pointer;color:var(--accent-d);font-size:13px;padding:0 4px">✏</button>
+         <button onclick="havaManuelSil('${esc(ad)}')" title="Sil"
+           style="background:none;border:none;cursor:pointer;color:#991b1b;font-size:13px;padding:0 4px">×</button>`;
+    const sonStr = _havaManuelSonFmt(m.son);
+    const sonHtml = sonStr ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(sonStr)}</div>` : "";
+    html += ayraciAc + baslikHtml +
+      `<div style="display:flex;align-items:center;gap:6px;font-size:13px">
+         <span style="flex:1">${esc(m.not)}</span>
+         ${aksiyon}
+       </div>
+       ${sonHtml}
+      </div>`;
+  } else if (!isMisafir()) {
+    html += ayraciAc + baslikHtml +
+      `<button onclick="havaManuelDuzenleAc('${esc(ad)}')"
+         style="background:none;border:1px dashed var(--border);border-radius:6px;cursor:pointer;color:var(--muted);font-size:12px;padding:4px 8px;width:100%">
+         + Manuel not ekle
+       </button>
+      </div>`;
+  }
+
+  return html;
+}
+
+function havaTipYerlestir(chip) {
+  if (!_havaTipEl) return;
+  // İçerik değişince yeniden boyutlanmış olabilir — pozisyonu yeniden hesapla
+  _havaTipEl.classList.remove("below");
   const r = chip.getBoundingClientRect();
-  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  const tw = _havaTipEl.offsetWidth, th = _havaTipEl.offsetHeight;
   const vw = window.innerWidth, margin = 8;
   let left = r.left + r.width / 2 - tw / 2;
   if (left < margin) left = margin;
@@ -94,13 +159,90 @@ window.havaTipToggle = (chip) => {
   let below = false;
   if (top < margin) { top = r.bottom + 10; below = true; }
   const arrowLeft = r.left + r.width / 2 - left;
-  tip.style.left = left + "px";
-  tip.style.top = top + "px";
-  tip.style.setProperty("--arrow-left", arrowLeft + "px");
-  if (below) tip.classList.add("below");
+  _havaTipEl.style.left = left + "px";
+  _havaTipEl.style.top  = top  + "px";
+  _havaTipEl.style.setProperty("--arrow-left", arrowLeft + "px");
+  if (below) _havaTipEl.classList.add("below");
+}
+
+function havaTipYenile() {
+  if (!_havaTipEl) return;
+  const ad = _havaTipEl._santiye;
+  _havaTipEl.innerHTML = havaTipIcerikHTML(ad);
+  havaTipYerlestir(_havaTipEl._chip);
+  if (_manuelEdit === ad) el("hava-manuel-input")?.focus();
+}
+
+window.havaTipToggle = (chip) => {
+  if (_havaTipEl && _havaTipEl._chip === chip) { havaTipKapat(); return; }
+  havaTipKapat();
+  const ad = chip.getAttribute("data-santiye");
+  if (!ad || !app.havaDurumu[ad]?.durum) return;
+  const tip = document.createElement("div");
+  tip.className = "hava-tip";
+  tip.innerHTML = havaTipIcerikHTML(ad);
+  document.body.appendChild(tip);
+  tip._chip    = chip;
+  tip._santiye = ad;
+  _havaTipEl   = tip;
+  havaTipYerlestir(chip);
   requestAnimationFrame(() => tip.classList.add("show"));
-  tip._chip = chip;
-  _havaTipEl = tip;
+};
+
+window.havaManuelDuzenleAc = (ad) => {
+  if (isMisafir()) return;
+  _manuelEdit = ad;
+  havaTipYenile();
+};
+
+window.havaManuelIptal = () => {
+  _manuelEdit = null;
+  havaTipYenile();
+};
+
+async function _havaManuelYaz(ad, yeniNot) {
+  const sObj = app.santiyeler.find((s) => (typeof s === "object" ? s.name : s) === ad);
+  if (!sObj || typeof sObj !== "object") {
+    toast("Şantiye bulunamadı", "err");
+    return;
+  }
+  const yeniSon = yeniNot ? new Date().toISOString() : null;
+  const eskiNot = sObj.hava_manuel_not;
+  const eskiSon = sObj.hava_manuel_son;
+
+  // Optimistic UI — DB hata verirse geri alacağız
+  sObj.hava_manuel_not = yeniNot;
+  sObj.hava_manuel_son = yeniSon;
+  _manuelEdit = null;
+  havaTipYenile();
+  const chip = _havaTipEl?._chip;
+  if (chip) chip.setAttribute("title", yeniNot ? "Manuel: " + yeniNot : "");
+
+  try {
+    const bolgeQ = app.bolge ? `&bolge=eq.${encodeURIComponent(app.bolge)}` : "";
+    await dbPatch("santiyeler", `name=eq.${encodeURIComponent(ad)}${bolgeQ}`, {
+      hava_manuel_not: yeniNot,
+      hava_manuel_son: yeniSon,
+    });
+  } catch (err) {
+    // Rollback
+    sObj.hava_manuel_not = eskiNot;
+    sObj.hava_manuel_son = eskiSon;
+    havaTipYenile();
+    if (chip) chip.setAttribute("title", eskiNot ? "Manuel: " + eskiNot : "");
+    toast("Kaydedilemedi: " + (err.message || "Hata"), "err");
+  }
+}
+
+window.havaManuelKaydet = (ad) => {
+  if (isMisafir()) return;
+  const v = (el("hava-manuel-input")?.value || "").trim();
+  _havaManuelYaz(ad, v || null);
+};
+
+window.havaManuelSil = (ad) => {
+  if (isMisafir()) return;
+  _havaManuelYaz(ad, null);
 };
 
 document.addEventListener("click", (e) => {
@@ -109,8 +251,19 @@ document.addEventListener("click", (e) => {
   if (_havaTipEl._chip && _havaTipEl._chip.contains(e.target)) return;
   havaTipKapat();
 }, true);
-window.addEventListener("scroll", havaTipKapat, true);
-window.addEventListener("resize", havaTipKapat);
+
+// Manuel düzenleme açıkken mobil klavye scroll/resize tetikliyor —
+// bu durumda kapatmak yerine pozisyonu yeniden hesapla.
+function havaTipReposition() {
+  if (!_havaTipEl) return;
+  if (_manuelEdit) {
+    havaTipYerlestir(_havaTipEl._chip);
+  } else {
+    havaTipKapat();
+  }
+}
+window.addEventListener("scroll", havaTipReposition, true);
+window.addEventListener("resize", havaTipReposition);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") havaTipKapat(); });
 
 window.havaKonumAl = async (ad, btn) => {
@@ -179,7 +332,7 @@ export function renderSantiyeler() {
   el("view-projects").classList.toggle("hidden", !!app.secilenSantiye);
   el("view-detail").classList.toggle("hidden", !app.secilenSantiye);
   const fab = el("fab-add");
-  if (fab) fab.style.display = "none";
+  if (fab && !app.secilenSantiye) fab.style.display = "none";
 
   const aramaMetni = (app.filtre.santiyeAra || "").toLowerCase();
   const filtered = app.santiyeler.filter((s) => {

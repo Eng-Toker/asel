@@ -12,7 +12,7 @@ let _isMisafir = () => false;
 export function setIsMisafir(fn) { _isMisafir = fn; }
 
 export function tabGec(view, pushHistory = true) {
-  ["view-projects", "view-detail", "view-log", "view-ayarlar", "view-dashboard"]
+  ["view-projects", "view-detail", "view-log", "view-ayarlar", "view-dashboard", "view-stok"]
     .forEach((id) => el(id)?.classList.add("hidden"));
   app.aktifView = view;
   const bolgeTag = app.bolge ? ` [${app.bolge}]` : "";
@@ -49,6 +49,12 @@ export function tabGec(view, pushHistory = true) {
     document.title = "Dashboard | Şantiye Takip" + bolgeTag;
     if (pushHistory) history.pushState({ view }, "", "/dashboard");
     _renders.dashboard?.();
+    if (fab) fab.style.display = "none";
+  } else if (view === "stok") {
+    el("view-stok").classList.remove("hidden");
+    document.title = "Stok | Şantiye Takip" + bolgeTag;
+    if (pushHistory) history.pushState({ view }, "", "/stok");
+    _renders.stok?.();
     if (fab) fab.style.display = "none";
   }
 
@@ -95,5 +101,7 @@ window.addEventListener("popstate", async (e) => {
     tabGec("ayarlar", false);
   } else if (state.view === "dashboard") {
     tabGec("dashboard", false);
+  } else if (state.view === "stok") {
+    tabGec("stok", false);
   }
 });
