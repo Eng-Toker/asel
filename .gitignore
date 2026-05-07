@@ -58,3 +58,16 @@ MIMARI.md
 # Kişisel notlar (audit, handoff, session, manual tasks, vs.)
 # Bu klasör sadece yerel — git'e VE Cloudflare deploy'una gitmez.
 notlar/
+
+# 2026-05-08 P0 INCIDENT — Cloudflare Pages public sızıntı:
+# CLAUDE.md, MODULES.md, MANUAL_TASKS.md vb. santiye-takipp.pages.dev'de açıktı.
+# _redirects 404'e yönlendirdiğini iddia etse de cache eski deploy serve etti.
+# Defense in depth: bu dosyalar git'ten çıkarıldı → Pages deploy'a hiç girmez.
+# Lokalde kalır (Claude Code root'tan CLAUDE.md okuyor, Worker dosyaları
+# Dashboard'dan ayrı deploy ediliyor).
+CLAUDE.md
+MODULES.md
+cloudflare-worker.js
+wrangler.toml
+migrations/
+scripts/
